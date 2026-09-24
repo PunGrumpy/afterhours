@@ -4,8 +4,7 @@
   <img alt="Afterhours" src="./assets/afterhours-logo-light.svg" width="171" height="36">
 </picture>
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?style=flat&colorA=000000&colorB=000000)
-![Swift 6](https://img.shields.io/badge/Swift-6-000000?style=flat&colorA=000000&colorB=000000)
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?style=flat&colorA=000000&colorB=000000) ![Swift 6](https://img.shields.io/badge/Swift-6-000000?style=flat&colorA=000000&colorB=000000)
 
 Your agents work after hours, this keeps your Mac awake for them.
 
