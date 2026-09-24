@@ -66,6 +66,7 @@ final class AppModel {
     @ObservationIgnored private var tracker = ActivityTracker()
     @ObservationIgnored private var lastWorkingAt: Date?
     @ObservationIgnored private var sleepDisabledByUs = false
+    @ObservationIgnored private var warnedLowBattery = false
     @ObservationIgnored private var hotKey: HotKey?
 
     init() {
@@ -162,6 +163,20 @@ final class AppModel {
             next = .holding
         }
         apply(next)
+        warnIfBatteryLow(next)
+    }
+
+    /// Warns once per hold when the battery comes within 5 points of the cutoff, so you can plug
+    /// in before Afterhours lets the Mac sleep.
+    private func warnIfBatteryLow(_ state: HoldState) {
+        guard state.isHolding, !battery.onAC, prefs.batteryThreshold > 0, let percent = battery.percent else {
+            warnedLowBattery = false
+            return
+        }
+        guard percent <= prefs.batteryThreshold + 5, !warnedLowBattery else { return }
+        warnedLowBattery = true
+        announce("Battery is getting low",
+                 body: "Afterhours lets your Mac sleep at \(prefs.batteryThreshold)%. It's at \(percent)% now.")
     }
 
     /// Keeps waiting after agents finish while a session is still open, up to the limit for the
