@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions: {}
 
@@ -11,6 +12,7 @@ concurrency:
 
 jobs:
   select-mode:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,7 +76,9 @@ jobs:
 
   app:
     needs: publish
-    if: contains(needs.publish.outputs.published-packages, '"@afterhours/macos"')
+    # Run it by hand to rebuild the app for the current version's tag.
+    if: >-
+      !cancelled() && (github.event_name == 'workflow_dispatch' || contains(needs.publish.outputs.published-packages, '"@afterhours/macos"'))
     runs-on: macos-26
     permissions:
       contents: write
@@ -93,6 +97,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(jq -r .version apps/macos/package.json)"
+          tag="@afterhours/macos@$version"
           zip="Afterhours-$version.zip"
           ditto -c -k --keepParent apps/macos/build/Afterhours.app "$zip"
-          gh release upload "@afterhours/macos@$version" "$zip" --repo "$GITHUB_REPOSITORY"
+          # Changesets skips the release when the package has no CHANGELOG.md yet.
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$tag" --generate-notes
+          gh release upload "$tag" "$zip" --repo "$GITHUB_REPOSITORY" --clobber
