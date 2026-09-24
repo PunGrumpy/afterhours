@@ -7,6 +7,18 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     let processNames: Set<String>
     /// Substrings to look for in argv when the agent runs under node, bun, or python.
     let argvMarkers: [String]
+    let commands: Set<String>
+    let excludedArgv: [String]
+
+    init(id: String, displayName: String, processNames: Set<String>, argvMarkers: [String],
+         commands: Set<String>? = nil, excludedArgv: [String] = []) {
+        self.id = id
+        self.displayName = displayName
+        self.processNames = processNames
+        self.argvMarkers = argvMarkers
+        self.commands = commands ?? processNames
+        self.excludedArgv = excludedArgv
+    }
 
     static let all: [AgentKind] = [
         AgentKind(id: "claude", displayName: "Claude Code", processNames: ["claude"],
@@ -24,6 +36,22 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         AgentKind(id: "aider", displayName: "Aider", processNames: ["aider"],
                   argvMarkers: ["/bin/aider", "aider/main.py", "-m aider"]),
         AgentKind(id: "amp", displayName: "Amp", processNames: ["amp"], argvMarkers: ["@sourcegraph/amp"]),
+        AgentKind(id: "droid", displayName: "Droid", processNames: ["droid"],
+                  argvMarkers: ["node_modules/droid/bin/droid", "@factory/cli"]),
+        AgentKind(id: "goose", displayName: "Goose", processNames: ["goose"], argvMarkers: []),
+        // Sessions run in a `kiro-cli-chat` child; other kiro-cli helpers stay up without one.
+        AgentKind(id: "kiro", displayName: "Kiro CLI", processNames: ["kiro-cli", "kiro-cli-chat"],
+                  argvMarkers: [], commands: ["kiro-cli"]),
+        AgentKind(id: "kilo", displayName: "Kilo CLI", processNames: ["kilo", ".kilo"],
+                  argvMarkers: ["@kilocode/cli"], commands: ["kilo", "kilocode"]),
+        // Sets process.title, so only argv reveals it.
+        AgentKind(id: "openclaw", displayName: "OpenClaw", processNames: [], argvMarkers: ["openclaw"],
+                  commands: ["openclaw"]),
+        AgentKind(id: "hermes", displayName: "Hermes Agent", processNames: [],
+                  argvMarkers: ["/hermes-agent/hermes", "hermes_cli", "bin/hermes"], commands: ["hermes"]),
+        AgentKind(id: "cline", displayName: "Cline CLI", processNames: ["cline", ".cline"],
+                  argvMarkers: ["node_modules/cline/bin/cline"], commands: ["cline"],
+                  excludedArgv: ["--cline-hub-daemon"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -33,17 +61,22 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         let home = NSHomeDirectory()
         var dirs = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/homebrew/bin", "\(home)/.local/bin",
                     "\(home)/.bun/bin", "\(home)/.npm-global/bin", "\(home)/.volta/bin", "\(home)/.cargo/bin",
-                    "\(home)/.opencode/bin", "\(home)/.claude/local", "\(home)/.amp/bin"]
+                    "\(home)/.opencode/bin", "\(home)/.claude/local", "\(home)/.amp/bin",
+                    "/Applications/Kiro CLI.app/Contents/MacOS"]
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let path = Power.run(shell, ["-lc", "printf %s \"$PATH\""]).output
         dirs += path.split(separator: ":").map(String.init)
         let fm = FileManager.default
         return Set(all.filter { kind in
-            kind.processNames.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
+            kind.commands.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
         }.map(\.id))
     }
 
     static let interpreters: Set<String> = ["node", "bun", "deno", "python", "python3", "Python"]
+
+    static func isInterpreter(_ name: String) -> Bool {
+        interpreters.contains(name) || name.hasPrefix("python3.")
+    }
 }
 
 /// Tracks CPU usage of agent process trees so we can tell "working" from "sitting at a prompt".
@@ -109,10 +142,24 @@ struct ActivityTracker {
 
     private func match(pid: Int32, name: String, enabled: Set<String>) -> AgentKind? {
         let candidates = AgentKind.all.filter { enabled.contains($0.id) }
-        if let kind = candidates.first(where: { $0.processNames.contains(name) }) { return kind }
-        guard AgentKind.interpreters.contains(name) else { return nil }
-        let argv = Proc.arguments(pid).prefix(4).joined(separator: " ")
-        return candidates.first { kind in kind.argvMarkers.contains { argv.contains($0) } }
+        var argv: String?
+        func arguments() -> String {
+            if let argv { return argv }
+            let joined = Proc.arguments(pid).prefix(4).joined(separator: " ")
+            argv = joined
+            return joined
+        }
+        let kind: AgentKind?
+        if let named = candidates.first(where: { $0.processNames.contains(name) }) {
+            kind = named
+        } else if AgentKind.isInterpreter(name) {
+            kind = candidates.first { kind in kind.argvMarkers.contains { arguments().contains($0) } }
+        } else {
+            kind = nil
+        }
+        guard let kind else { return nil }
+        if kind.excludedArgv.contains(where: { arguments().contains($0) }) { return nil }
+        return kind
     }
 
     private func tree(_ root: Int32, children: [Int32: [Int32]]) -> Set<Int32> {

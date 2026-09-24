@@ -11,7 +11,7 @@ Your agents work after hours, this keeps your Mac awake for them.
 
 Afterhours is a menu bar app that keeps your Mac awake while coding agents work, even with the lid closed. When the last agent finishes, it lets your Mac sleep again.
 
-Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CLI, Cursor CLI, Aider, and Amp.
+Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CLI, Cursor CLI, Aider, Amp, Droid, Goose, Kiro CLI, Kilo CLI, OpenClaw, Hermes Agent, and Cline CLI.
 
 ## Install
 
