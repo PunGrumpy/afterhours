@@ -2,8 +2,7 @@ import AfterhoursCore
 import AppKit
 import SwiftUI
 
-/// Colors for the dark menu. Text, hairlines, and fills get stronger with Increase Contrast, and
-/// the background turns solid with Reduce Transparency.
+/// Stronger with Increase Contrast; the background turns solid with Reduce Transparency.
 private struct Palette {
     static let blue = Color(red: 10 / 255, green: 132 / 255, blue: 1)
     static let green = Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
@@ -19,7 +18,6 @@ private struct Palette {
     var fill: Color { .white.opacity(increased ? 0.22 : 0.1) }
     var hoverFill: Color { .white.opacity(increased ? 0.32 : 0.18) }
     var track: Color { .white.opacity(increased ? 0.3 : 0.15) }
-    /// How far idle rows recede.
     var idleRow: Double { increased ? 0.7 : 0.45 }
 
     static func background(reduceTransparency: Bool) -> Color {
@@ -27,7 +25,6 @@ private struct Palette {
     }
 }
 
-/// Reads the contrast setting and hands back the matching palette.
 private protocol Themed: View {
     var contrast: ColorSchemeContrast { get }
 }
@@ -36,14 +33,11 @@ private extension Themed {
     var palette: Palette { Palette(contrast: contrast) }
 }
 
-/// Motion tokens. Every animation in the menu uses one of these three, so the menu moves as one
-/// system. Hover and hotkey changes are deliberately instant.
+/// Every animation in the menu. Hover and hotkey changes stay instant on purpose.
 private enum Motion {
-    /// Press feedback: a strong ease-out, so the scale starts moving on the first frame.
     static let press = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.14)
-    /// State changes (row fades, status text, errors).
     static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
-    /// The switch knob moves on screen and can be flipped again mid-flight, so it's a spring.
+    /// A spring, so a switch flipped again mid-flight reverses smoothly.
     static let knob = Animation.spring(duration: 0.25, bounce: 0)
 }
 
@@ -112,7 +106,6 @@ struct MenuView: View, Themed {
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-                        // Keyed by state, not by the ticking minutes, so only real state changes cross-fade.
                         .id(model.state.key)
                         .transition(.blurFade)
                 }
@@ -194,8 +187,6 @@ struct MenuView: View, Themed {
 
 // MARK: - Pieces
 
-/// The mug mascot, in the header. Its steam and face carry the state; the blue fill matches the switch
-/// while it keeps the Mac awake.
 private struct MascotBadge: View, Themed {
     let state: HoldState
     @Environment(\.colorSchemeContrast) var contrast
@@ -239,7 +230,6 @@ private struct BatterySection: View, Themed {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(palette.track)
-                        // Width follows the charge with no animation: it updates every few seconds.
                         Capsule().fill(color(percent)).frame(width: geo.size.width * CGFloat(percent) / 100)
                     }
                 }
@@ -295,7 +285,6 @@ private struct AgentRow: View, Themed {
                 Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
             }
         }
-        // Idle agents recede by opacity alone, so the change reads without movement.
         .opacity(isActive ? 1 : palette.idleRow)
         .animation(Motion.fade, value: isActive)
         .accessibilityElement(children: .combine)
@@ -311,8 +300,7 @@ private struct AgentRow: View, Themed {
     }
 }
 
-/// The agent's logo from the bundled `agents/<id>.png`, or a generic tile for agents without one.
-/// Transparent glyph logos sit inset on the tile; full-bleed app-icon logos fill it.
+/// Transparent glyph logos sit inset on the tile; full-bleed app icons fill it.
 private struct AgentIcon: View, Themed {
     let id: String
     @Environment(\.colorSchemeContrast) var contrast
@@ -333,7 +321,6 @@ private struct AgentIcon: View, Themed {
         }
         .frame(width: 22, height: 22)
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        // A faint inset edge so dark logos keep their shape on the dark menu.
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
@@ -377,11 +364,10 @@ private struct ChipButton: View, Themed {
                 .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? palette.hoverFill : palette.fill))
         }
         .buttonStyle(PressScale())
-        .onHover { hovering = $0 }  // Instant on purpose: hover fires too often to animate.
+        .onHover { hovering = $0 }
     }
 }
 
-/// Scales a pressed control to 0.97 so the click registers before the action finishes.
 private struct PressScale: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -392,7 +378,6 @@ private struct PressScale: ButtonStyle {
     }
 }
 
-/// A row that behaves like a native menu item: the highlight follows the pointer with no transition.
 private struct MenuItem: View, Themed {
     let title: String
     let shortcut: String
@@ -419,7 +404,6 @@ private struct MenuItem: View, Themed {
     }
 }
 
-/// 40×24 switch.
 private struct PillSwitch: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         PillSwitchBody(isOn: configuration.$isOn)
@@ -462,7 +446,7 @@ private struct PillSwitchBody: View, Themed {
     }
 }
 
-/// Forces the hosting window (the menu bar popover) into dark vibrancy to match the design.
+/// The menu is designed dark only, so force the popover window's appearance.
 private struct DarkWindow: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -484,15 +468,14 @@ private struct BlurFade: ViewModifier {
 }
 
 private extension AnyTransition {
-    /// Cross-fade with a 2 pt blur, so two states read as one changing element instead of two
-    /// overlapping ones.
+    /// The blur makes two states read as one changing element, not two overlapping ones.
     static var blurFade: AnyTransition {
         .modifier(active: BlurFade(active: true), identity: BlurFade(active: false))
     }
 }
 
 private extension HoldState {
-    /// Identity for transitions: changes when the state changes, not when its payload ticks.
+    /// Changes with the state, not with its payload, so ticking times don't restart transitions.
     var key: String {
         switch self {
         case .holding: "holding"

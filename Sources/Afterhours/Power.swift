@@ -60,7 +60,7 @@ nonisolated enum Power {
     static func displaySleepNow() { run("/usr/bin/pmset", ["displaysleepnow"]) }
 }
 
-/// Holds a PreventUserIdleSystemSleep assertion: keeps the Mac awake while the lid is open.
+/// Keeps the Mac awake while the lid is open.
 final class IdleSleepAssertion {
     private var id: IOPMAssertionID = 0
 
@@ -77,8 +77,8 @@ final class IdleSleepAssertion {
     }
 }
 
-/// Lid-closed wake via `pmset disablesleep`, which needs root. We install a sudoers rule that allows
-/// exactly the two commands `pmset -a disablesleep 0|1` without a password, once, with an admin prompt.
+/// `pmset disablesleep` keeps a closed Mac awake but needs root, so a sudoers rule allows exactly
+/// `pmset -a disablesleep 0` and `1` without a password.
 enum LidControl {
     static let sudoersPath = "/etc/sudoers.d/afterhours"
 
@@ -89,7 +89,6 @@ enum LidControl {
         Power.run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", disabled ? "1" : "0"]).status == 0
     }
 
-    /// Prompts for an admin password via AppleScript and installs the sudoers rule.
     static func install() throws {
         let user = NSUserName()
         let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1\n"

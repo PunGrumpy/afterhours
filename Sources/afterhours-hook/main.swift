@@ -1,11 +1,10 @@
 import Foundation
 import AfterhoursCore
 
-// Usage:
-//   afterhours-hook <agent>                                  reads a Claude-Code-style hook payload on stdin
-//   afterhours-hook <agent> --state <working|waiting|idle|end> [--session <id>]
+// afterhours-hook <agent>  reads a Claude Code hook payload on stdin
+// afterhours-hook <agent> --state working|waiting|idle|end [--session <id>]
 //
-// Always exits 0 and prints nothing: a hook must never break the agent it's attached to.
+// Always exits 0 and prints nothing, so a failure never breaks the agent.
 
 let args = CommandLine.arguments.dropFirst()
 let agent = args.first ?? "agent"
@@ -26,7 +25,6 @@ enum Action {
     case end
 }
 
-/// Maps lifecycle events to actions; unknown events are ignored.
 func action(forEvent event: String) -> Action? {
     switch event {
     case "SessionStart", "Stop": return .set(.idle)
@@ -46,7 +44,7 @@ if let explicit = option("--state") {
     exit(0)
 }
 
-/// The agent process is the first ancestor that isn't a shell wrapper.
+/// The first ancestor that isn't a shell wrapper.
 func agentPid() -> Int32? {
     let wrappers: Set<String> = ["sh", "bash", "zsh", "dash", "fish", "env", "afterhours-hook", "timeout"]
     var pid = getppid()

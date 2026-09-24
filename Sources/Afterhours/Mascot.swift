@@ -1,9 +1,7 @@
 import AppKit
 
-/// The Afterhours mascot: a coffee mug, the fuel of after-hours work. Steam carries the state, so
-/// it reads at a glance even at 16 pt: two wisps while it keeps the Mac awake, one while paused,
-/// none when the Mac can sleep. The face backs it up: eyes open, half shut, shut, or `> <` when a
-/// safety rule stops it.
+/// Steam carries the state so it reads at 16 pt: two wisps while awake, one while paused, none when
+/// the Mac can sleep.
 enum Mug {
     enum Mood {
         case awake, asleep, drowsy, alarmed
@@ -26,8 +24,7 @@ enum Mug {
         }
     }
 
-    /// A square template image, `size` points wide. At menu bar sizes the eyes grow a little and
-    /// the smile drops out, so the face still reads at 16 pt.
+    /// At menu bar sizes the eyes grow and the smile drops out, so the face still reads.
     static func image(_ mood: Mood, size: CGFloat = 16) -> NSImage {
         let compact = size <= 20
         let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
@@ -47,12 +44,10 @@ enum Mug {
     // MARK: - Drawing (unit square, y down)
 
     private static func draw(_ ctx: CGContext, mood: Mood, compact: Bool) {
-        // Cup and handle.
         roundedRect(ctx, CGRect(x: 0.12, y: 0.36, width: 0.58, height: 0.54), radius: 0.11)
         ctx.setLineWidth(0.08)
         ctx.strokeEllipse(in: CGRect(x: 0.6, y: 0.47, width: 0.25, height: 0.27))
 
-        // Steam.
         for i in 0..<mood.wisps {
             let x: CGFloat = i == 0 ? 0.32 : 0.5
             let wisp = CGMutablePath()
@@ -65,7 +60,6 @@ enum Mug {
             ctx.strokePath()
         }
 
-        // The face is punched out of the cup.
         let k: CGFloat = compact ? 1.3 : 1
         let w = 0.08 * k, h = 0.13 * k
         let eyes = [CGPoint(x: 0.31, y: 0.57), CGPoint(x: 0.51, y: 0.57)]
@@ -111,7 +105,6 @@ enum Mug {
                     radius: min(width, height) / 2)
     }
 
-    /// A downward-curving arc: the smile, and the eyes when they're shut.
     private static func arc(_ ctx: CGContext, center: CGPoint, radius: CGFloat, lineWidth: CGFloat) {
         ctx.setLineWidth(lineWidth)
         ctx.setLineCap(.round)

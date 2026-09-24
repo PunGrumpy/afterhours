@@ -1,7 +1,7 @@
 import Carbon.HIToolbox
 
-/// A system-wide hotkey via Carbon, which (unlike NSEvent monitors) needs no Accessibility permission.
-/// It's registered once and lives as long as the app, so it never unregisters.
+/// Carbon hotkeys, unlike NSEvent monitors, need no Accessibility permission. It lives as long as the
+/// app, so it never unregisters.
 final class HotKey {
     private var ref: EventHotKeyRef?
     private var handler: EventHandlerRef?
@@ -22,7 +22,6 @@ final class HotKey {
         RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), id, GetApplicationEventTarget(), 0, &ref)
     }
 
-    /// ⌥⌘L
     static func toggle(_ action: @escaping () -> Void) -> HotKey {
         HotKey(keyCode: kVK_ANSI_L, modifiers: cmdKey | optionKey, action: action)
     }

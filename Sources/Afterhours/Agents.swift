@@ -1,13 +1,11 @@
 import Foundation
 import AfterhoursCore
 
-/// A coding agent we know how to spot in the process table.
 nonisolated struct AgentKind: Identifiable, Hashable {
     let id: String
     let displayName: String
-    /// Exact process names that identify the agent.
     let processNames: Set<String>
-    /// For agents running under an interpreter (node, python, bun): substrings to look for in argv.
+    /// Substrings to look for in argv when the agent runs under node, bun, or python.
     let argvMarkers: [String]
 
     static let all: [AgentKind] = [
@@ -15,11 +13,10 @@ nonisolated struct AgentKind: Identifiable, Hashable {
                   argvMarkers: ["@anthropic-ai/claude-code", "claude-code/cli"]),
         AgentKind(id: "codex", displayName: "Codex", processNames: ["codex"], argvMarkers: ["@openai/codex"]),
         AgentKind(id: "opencode", displayName: "OpenCode", processNames: ["opencode"], argvMarkers: ["opencode-ai"]),
-        // Antigravity CLI replaced Gemini CLI for personal accounts on 2026-06-18.
-        // `agy` in a terminal; T3 Code runs it through its ACP server instead.
+        // Replaced Gemini CLI on 2026-06-18. T3 Code runs it through its ACP server instead of `agy`.
         AgentKind(id: "antigravity", displayName: "Antigravity CLI", processNames: ["agy", "agy_acp_server.par"],
                   argvMarkers: []),
-        // Still served to Gemini Code Assist Standard/Enterprise and Google Cloud users.
+        // Still served to Gemini Code Assist and Google Cloud users.
         AgentKind(id: "gemini", displayName: "Gemini CLI", processNames: ["gemini"],
                   argvMarkers: ["@google/gemini-cli", "/bin/gemini"]),
         AgentKind(id: "copilot", displayName: "Copilot CLI", processNames: ["copilot"], argvMarkers: ["@github/copilot"]),
@@ -31,8 +28,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
 
-    /// Looks for agent CLIs in the login shell's PATH plus the usual install locations.
-    /// Spawning the login shell takes ~100 ms, so this runs off the main actor.
+    /// Looks for agent CLIs on the login shell's PATH and in common install directories.
     @concurrent static func findInstalled() async -> Set<String> {
         let home = NSHomeDirectory()
         var dirs = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/homebrew/bin", "\(home)/.local/bin",
@@ -58,14 +54,13 @@ struct ActivityTracker {
         let lastActive: Date?
     }
 
-    /// Fraction of one core (averaged over a sample interval) that counts as activity.
+    /// Fraction of one core, averaged between scans, that counts as activity.
     private let cpuThreshold = 0.03
 
     private var lastScan: Date?
     private var cpuByPid: [Int32: UInt64] = [:]
     private var lastActive: [Int32: Date] = [:]
 
-    /// One pass over the process table. Returns every running agent root process with its last active time.
     mutating func scan(enabled: Set<String>) -> [Detected] {
         let now = Date()
         let pids = Proc.allPids()
@@ -79,7 +74,7 @@ struct ActivityTracker {
         var roots: [(Int32, AgentKind)] = []
         for (pid, name) in names {
             guard let kind = match(pid: pid, name: name, enabled: enabled) else { continue }
-            // Skip agents whose parent is the same agent (e.g. a node wrapper spawning the real binary).
+            // A node wrapper that spawns the real binary would otherwise count twice.
             if let parent = Proc.parent(pid), let parentName = names[parent],
                match(pid: parent, name: parentName, enabled: enabled)?.id == kind.id {
                 continue

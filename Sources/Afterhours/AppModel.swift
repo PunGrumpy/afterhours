@@ -3,7 +3,6 @@ import AfterhoursCore
 import Observation
 import UserNotifications
 
-/// Per-agent rollup shown in the menu.
 struct AgentSummary: Identifiable {
     let id: String
     let name: String
@@ -18,10 +17,9 @@ struct AgentSession {
     let state: AgentState
 }
 
-/// Why Afterhours is keeping the Mac awake.
 enum HoldReason: Equatable {
     case working
-    /// Agents finished or asked you something; waiting until `until`, or while sessions stay open.
+    /// A nil `until` waits until every session closes.
     case waitingForYou(until: Date?)
 }
 
@@ -50,10 +48,9 @@ final class AppModel {
     private(set) var pausedUntil: Date?
     private(set) var lastError: String?
 
-    /// A hooked session that claims "working" but whose process tree has been silent this long is
-    /// considered stuck (e.g. the user interrupted the agent, which fires no Stop hook).
+    /// Interrupting Claude Code with Esc fires no Stop hook, so a silent "working" session is stuck.
     @ObservationIgnored private let stuckAfter: TimeInterval = 15 * 60
-    /// Process-detected agents count as working while they used CPU within this window.
+    /// Agents without hooks count as working for this long after their last CPU activity.
     @ObservationIgnored private let activeWindow: TimeInterval = 45
 
     @ObservationIgnored private let assertion = IdleSleepAssertion()
@@ -132,7 +129,6 @@ final class AppModel {
 
         let working = sessions.contains { $0.state == .working }
         if working { lastWorkingAt = now }
-        // Once every session has closed, there's nothing left to wait for.
         if sessions.isEmpty { lastWorkingAt = nil }
         let reason: HoldReason? = working ? .working : waitForYou(now: now)
         if let reason { holdReason = reason }
@@ -153,8 +149,7 @@ final class AppModel {
         warnIfBatteryLow(next)
     }
 
-    /// Warns once per hold when the battery comes within 5 points of the cutoff, so you can plug
-    /// in before Afterhours lets the Mac sleep.
+    /// Warns once per hold, 5 points before the battery cutoff.
     private func warnIfBatteryLow(_ state: HoldState) {
         guard state.isHolding, !battery.onAC, prefs.batteryThreshold > 0, let percent = battery.percent else {
             warnedLowBattery = false
@@ -166,8 +161,7 @@ final class AppModel {
                  body: "Afterhours lets your Mac sleep at \(prefs.batteryThreshold)%. It's at \(percent)% now.")
     }
 
-    /// Keeps waiting after agents finish while a session is still open, up to the limit for the
-    /// current power source, counted from when an agent last worked.
+    /// The wait limit counts from when an agent last worked.
     private func waitForYou(now: Date) -> HoldReason? {
         guard let last = lastWorkingAt, !sessions.isEmpty else { return nil }
         let minutes = battery.onAC ? prefs.pluggedInWaitMinutes : prefs.batteryWaitMinutes
@@ -295,7 +289,7 @@ final class AppModel {
         }
     }
 
-    /// Whether holding also survives closing the lid.
+    /// Whether holding survives closing the lid.
     var lidProof: Bool { prefs.lidClosedMode && lidControlInstalled }
 
     var summary: String {

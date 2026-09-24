@@ -1,7 +1,6 @@
 import Foundation
 import AfterhoursCore
 
-/// Installs Afterhours's lifecycle hooks into Claude Code `settings.json` files.
 enum ClaudeHooks {
     static let events = [
         "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
@@ -12,7 +11,7 @@ enum ClaudeHooks {
 
     static var command: String { "'\(AfterhoursPaths.hookBinary.path)' claude" }
 
-    /// `~/.claude` plus any `~/.claude-*` profile directories (CLAUDE_CONFIG_DIR setups).
+    /// `~/.claude` plus any `~/.claude-*` profiles used with CLAUDE_CONFIG_DIR.
     static func configDirectories() -> [URL] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         var dirs: [URL] = []
@@ -58,7 +57,7 @@ enum ClaudeHooks {
         try writeSettings(settings, to: dir)
     }
 
-    /// Copies the bundled hook binary to a stable path so hooks survive the app being moved.
+    /// A stable path keeps hooks working after the app moves.
     static func installHookBinary() throws {
         guard let bundled = Bundle.main.url(forAuxiliaryExecutable: "afterhours-hook") else {
             throw NSError(domain: "Afterhours", code: 2, userInfo: [

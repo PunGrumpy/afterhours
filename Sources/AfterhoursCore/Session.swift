@@ -1,9 +1,8 @@
 import Foundation
 
-/// State an agent reports through its lifecycle hooks.
 public enum AgentState: String, Codable, Sendable {
     case working
-    case waiting  // blocked on the user (permission prompt, question)
+    case waiting  // on a permission prompt or a question for you
     case idle
 }
 
@@ -36,7 +35,7 @@ public enum AfterhoursPaths {
     public static var bin: URL { support.appendingPathComponent("bin", isDirectory: true) }
     public static var hookBinary: URL { bin.appendingPathComponent("afterhours-hook") }
 
-    /// File name for a session; hashed-ish so arbitrary ids are safe on disk.
+    /// Replaces characters that aren't safe in a file name.
     public static func sessionFile(agent: String, id: String) -> URL {
         let safe = "\(agent)-\(id)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
         return sessions.appendingPathComponent(String(safe) + ".json")
