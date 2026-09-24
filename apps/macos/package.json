@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "./scripts/build-app.sh"
+    "build": "./scripts/build-app.sh",
+    "package": "./scripts/package-app.sh"
   },
   "devDependencies": {
     "@afterhours/core": "workspace:*"
