@@ -19,6 +19,11 @@ nonisolated struct AgentKind: Identifiable, Hashable {
                   argvMarkers: ["@openai/codex"], supportsHooks: false),
         AgentKind(id: "opencode", displayName: "OpenCode", processNames: ["opencode"],
                   argvMarkers: ["opencode-ai"], supportsHooks: false),
+        // Antigravity CLI replaced Gemini CLI for personal accounts on 2026-06-18.
+        // `agy` in a terminal; T3 Code runs it through its ACP server instead.
+        AgentKind(id: "antigravity", displayName: "Antigravity CLI", processNames: ["agy", "agy_acp_server.par"],
+                  argvMarkers: [], supportsHooks: false),
+        // Still served to Gemini Code Assist Standard/Enterprise and Google Cloud users.
         AgentKind(id: "gemini", displayName: "Gemini CLI", processNames: ["gemini"],
                   argvMarkers: ["@google/gemini-cli", "/bin/gemini"], supportsHooks: false),
         AgentKind(id: "copilot", displayName: "Copilot CLI", processNames: ["copilot"],
