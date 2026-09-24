@@ -7,18 +7,19 @@ let appSettings: [SwiftSetting] = [
     .enableUpcomingFeature("InferIsolatedConformances"),
 ]
 
+let core: Target.Dependency = .product(name: "AfterhoursCore", package: "core")
+
 let package = Package(
     name: "Afterhours",
     platforms: [.macOS(.v14)],
+    dependencies: [.package(path: "../../packages/core")],
     targets: [
-        // A library: stays nonisolated so callers decide where it runs.
-        .target(name: "AfterhoursCore"),
         .executableTarget(
             name: "Afterhours",
-            dependencies: ["AfterhoursCore"],
+            dependencies: [core],
             swiftSettings: appSettings,
             linkerSettings: [.linkedFramework("IOKit"), .linkedFramework("Carbon")]
         ),
-        .executableTarget(name: "afterhours-hook", dependencies: ["AfterhoursCore"], swiftSettings: appSettings),
+        .executableTarget(name: "afterhours-hook", dependencies: [core], swiftSettings: appSettings),
     ]
 )

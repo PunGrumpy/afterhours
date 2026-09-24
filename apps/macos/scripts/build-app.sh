@@ -20,6 +20,7 @@ pick_sdk() {
   xcrun --show-sdk-path
 }
 SDK="${SDKROOT:-$(pick_sdk)}"
+CORE=../../packages/core/Sources/AfterhoursCore
 echo "SDK: $SDK"
 
 compile_arch() {
@@ -32,7 +33,7 @@ compile_arch() {
   # AfterhoursCore is a library, so it stays nonisolated; the executables default to the main actor.
   "${swiftc[@]}" -parse-as-library -emit-library -static -module-name AfterhoursCore \
     -emit-module -emit-module-path "$dir/AfterhoursCore.swiftmodule" \
-    -o "$dir/libAfterhoursCore.a" Sources/AfterhoursCore/*.swift
+    -o "$dir/libAfterhoursCore.a" "$CORE"/*.swift
   "${swiftc[@]}" -default-isolation MainActor -I "$dir" -L "$dir" -lAfterhoursCore \
     -o "$dir/afterhours-hook" Sources/afterhours-hook/*.swift
   "${swiftc[@]}" -default-isolation MainActor -parse-as-library -I "$dir" -L "$dir" -lAfterhoursCore \

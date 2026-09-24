@@ -20,10 +20,10 @@ Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CL
 You need macOS 14 or later and the Xcode Command Line Tools.
 
 ```bash
-./scripts/build-app.sh --install
+./apps/macos/scripts/build-app.sh --install
 ```
 
-This builds a universal `Afterhours.app`, copies it to `/Applications`, and opens it. Leave off `--install` to build `build/Afterhours.app` only.
+This builds a universal `Afterhours.app`, copies it to `/Applications`, and opens it. Leave off `--install` to build `apps/macos/build/Afterhours.app` only.
 
 ### 2. Keep it awake with the lid closed
 
@@ -101,4 +101,4 @@ Remove the system changes before deleting the app:
 2. Click **Settings… > Agents > Remove** for each config directory.
 3. Delete the app and `~/Library/Application Support/Afterhours`.
 
-Agent logos in `Resources/agents/` come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and each vendor's own site. They're trademarks of their owners.
+Agent logos in `apps/macos/Resources/agents/` come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and each vendor's own site. They're trademarks of their owners.
