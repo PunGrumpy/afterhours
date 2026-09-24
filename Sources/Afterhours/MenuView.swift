@@ -278,14 +278,18 @@ private struct AgentRow: View {
 }
 
 /// The agent's logo from the bundled `agents/<id>.png`, or a generic tile for agents without one.
+/// Transparent glyph logos sit inset on the tile; full-bleed app-icon logos fill it.
 private struct AgentIcon: View {
     let id: String
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(Palette.fill)
-            if let image = Self.image(for: id) {
-                Image(nsImage: image).resizable().interpolation(.high)
+            if let logo = Self.logo(for: id) {
+                Image(nsImage: logo.image)
+                    .resizable()
+                    .interpolation(.high)
+                    .padding(logo.isGlyph ? 3 : 0)
             } else {
                 Image(systemName: "terminal")
                     .font(.system(size: 11, weight: .semibold))
@@ -299,14 +303,26 @@ private struct AgentIcon: View {
         .accessibilityHidden(true)
     }
 
-    private static var cache: [String: NSImage?] = [:]
+    private struct Logo {
+        let image: NSImage
+        /// A transparent top-left corner means a glyph, not a full app-icon tile.
+        let isGlyph: Bool
+    }
 
-    private static func image(for id: String) -> NSImage? {
+    private static var cache: [String: Logo?] = [:]
+
+    private static func logo(for id: String) -> Logo? {
         if let cached = cache[id] { return cached }
-        let image = Bundle.main.url(forResource: id, withExtension: "png", subdirectory: "agents")
+        let logo = Bundle.main.url(forResource: id, withExtension: "png", subdirectory: "agents")
             .flatMap(NSImage.init(contentsOf:))
-        cache[id] = image
-        return image
+            .map { image in
+                let corner = image.representations
+                    .compactMap { $0 as? NSBitmapImageRep }.first?
+                    .colorAt(x: 1, y: 1)?.alphaComponent ?? 1
+                return Logo(image: image, isGlyph: corner < 0.1)
+            }
+        cache[id] = logo
+        return logo
     }
 }
 

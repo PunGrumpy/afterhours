@@ -15,7 +15,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     static let all: [AgentKind] = [
         AgentKind(id: "claude", displayName: "Claude Code", processNames: ["claude"],
                   argvMarkers: ["@anthropic-ai/claude-code", "claude-code/cli"], supportsHooks: true),
-        AgentKind(id: "codex", displayName: "ChatGPT / Codex", processNames: ["codex"],
+        AgentKind(id: "codex", displayName: "Codex", processNames: ["codex"],
                   argvMarkers: ["@openai/codex"], supportsHooks: false),
         AgentKind(id: "opencode", displayName: "OpenCode", processNames: ["opencode"],
                   argvMarkers: ["opencode-ai"], supportsHooks: false),
@@ -23,7 +23,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
                   argvMarkers: ["@google/gemini-cli", "/bin/gemini"], supportsHooks: false),
         AgentKind(id: "copilot", displayName: "Copilot CLI", processNames: ["copilot"],
                   argvMarkers: ["@github/copilot"], supportsHooks: false),
-        AgentKind(id: "cursor", displayName: "Cursor Agent", processNames: ["cursor-agent"],
+        AgentKind(id: "cursor", displayName: "Cursor CLI", processNames: ["cursor-agent"],
                   argvMarkers: ["cursor-agent"], supportsHooks: false),
         AgentKind(id: "aider", displayName: "Aider", processNames: ["aider"],
                   argvMarkers: ["/bin/aider", "aider/main.py", "-m aider"], supportsHooks: false),
