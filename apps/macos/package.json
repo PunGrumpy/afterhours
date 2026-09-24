@@ -5,7 +5,7 @@
   "scripts": {
     "build": "./scripts/build-app.sh"
   },
-  "dependencies": {
+  "devDependencies": {
     "@afterhours/core": "workspace:*"
   }
 }
