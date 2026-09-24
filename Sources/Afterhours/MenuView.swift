@@ -108,7 +108,7 @@ struct MenuView: View, Themed {
                     .font(.system(size: 15, weight: .bold))
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     Text(statusLine(now: context.date))
-                        .font(.system(size: 11).monospacedDigit())
+                        .font(.system(size: 12).monospacedDigit())
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -155,7 +155,7 @@ struct MenuView: View, Themed {
                 SectionTitle("Agents")
                 Spacer()
                 Text(model.workingCount == 0 ? "None working" : "\(model.workingCount) working")
-                    .font(.system(size: 12.5).monospacedDigit())
+                    .font(.system(size: 12).monospacedDigit())
                     .foregroundStyle(palette.tertiaryText)
             }
             if summaries.isEmpty {
@@ -251,11 +251,11 @@ private struct BatterySection: View, Themed {
                     Spacer()
                     Text(cutoff).foregroundStyle(palette.tertiaryText)
                 }
-                .font(.system(size: 12.5).monospacedDigit())
+                .font(.system(size: 12).monospacedDigit())
                 .padding(.top, 8)
             } else {
                 Text("On AC power")
-                    .font(.system(size: 12.5))
+                    .font(.system(size: 12))
                     .foregroundStyle(palette.secondaryText)
                     .padding(.top, 6)
             }
@@ -285,14 +285,14 @@ private struct AgentRow: View, Themed {
         HStack(spacing: 12) {
             AgentIcon(id: summary.id)
             Text(summary.name)
-                .font(.system(size: 13.5, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .frame(maxWidth: .infinity, alignment: .leading)
             if summary.working > 0 {
                 status(summary.sessions == 1 ? "1 session" : "\(summary.sessions) sessions", dot: Palette.green)
             } else if summary.waiting > 0 {
                 status("Needs you", dot: Palette.orange)
             } else {
-                Text("Idle").font(.system(size: 12.5)).foregroundStyle(palette.tertiaryText)
+                Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
             }
         }
         // Idle agents recede by opacity alone, so the change reads without movement.
@@ -305,7 +305,7 @@ private struct AgentRow: View, Themed {
 
     private func status(_ text: String, dot: Color) -> some View {
         HStack(spacing: 8) {
-            Text(text).font(.system(size: 12.5).monospacedDigit()).foregroundStyle(palette.secondaryText)
+            Text(text).font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.secondaryText)
             Circle().fill(dot).frame(width: 7, height: 7)
         }
     }
@@ -370,7 +370,7 @@ private struct ChipButton: View, Themed {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -403,7 +403,7 @@ private struct MenuItem: View, Themed {
     var body: some View {
         Button(action: action) {
             HStack {
-                Text(title).font(.system(size: 14))
+                Text(title).font(.system(size: 13))
                 Spacer()
                 Text(shortcut)
                     .font(.system(size: 12))
