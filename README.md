@@ -103,3 +103,7 @@ Remove the system changes before deleting the app:
 3. Delete the app and `~/Library/Application Support/Afterhours`.
 
 Agent logos in `apps/macos/Resources/agents/` come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and each vendor's own site. They're trademarks of their owners.
+
+## License
+
+[MIT](LICENSE)
