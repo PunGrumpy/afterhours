@@ -11,8 +11,15 @@ final class Preferences {
     var respectLowPowerMode: Bool { didSet { save(respectLowPowerMode, "respectLowPowerMode") } }
     /// Use `pmset disablesleep` so the Mac also stays awake with the lid closed.
     var lidClosedMode: Bool { didSet { save(lidClosedMode, "lidClosedMode") } }
-    /// Keep holding this long after the last agent goes idle, so back-to-back turns don't flap.
-    var graceMinutes: Int { didSet { save(graceMinutes, "graceMinutes") } }
+    /// How long to keep waiting for you after agents finish or ask you something, so a remote
+    /// client (T3 Code, SSH) stays connected while you reply. In minutes; 0 doesn't wait, and
+    /// `untilSessionsClose` waits while any agent session is still open.
+    var pluggedInWaitMinutes: Int { didSet { save(pluggedInWaitMinutes, "pluggedInWaitMinutes") } }
+    /// The same wait on battery. Always a finite number of minutes, so a forgotten session can't
+    /// drain the battery.
+    var batteryWaitMinutes: Int { didSet { save(batteryWaitMinutes, "batteryWaitMinutes") } }
+
+    static let untilSessionsClose = -1
     var turnDisplayOff: Bool { didSet { save(turnDisplayOff, "turnDisplayOff") } }
     var notifications: Bool { didSet { save(notifications, "notifications") } }
     /// A name from /System/Library/Sounds, or "" for silence.
@@ -34,7 +41,8 @@ final class Preferences {
             "onlyWhenPluggedIn": false,
             "respectLowPowerMode": true,
             "lidClosedMode": true,
-            "graceMinutes": 1,
+            "pluggedInWaitMinutes": Self.untilSessionsClose,
+            "batteryWaitMinutes": 60,
             "turnDisplayOff": false,
             "notifications": true,
             "sound": "Glass",
@@ -44,7 +52,8 @@ final class Preferences {
         onlyWhenPluggedIn = defaults.bool(forKey: "onlyWhenPluggedIn")
         respectLowPowerMode = defaults.bool(forKey: "respectLowPowerMode")
         lidClosedMode = defaults.bool(forKey: "lidClosedMode")
-        graceMinutes = defaults.integer(forKey: "graceMinutes")
+        pluggedInWaitMinutes = defaults.integer(forKey: "pluggedInWaitMinutes")
+        batteryWaitMinutes = defaults.integer(forKey: "batteryWaitMinutes")
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
         sound = defaults.string(forKey: "sound") ?? ""

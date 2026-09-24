@@ -24,6 +24,13 @@ struct AgentSession: Identifiable, Equatable {
     let since: Date?
 }
 
+/// Why Afterhours is keeping the Mac awake.
+enum HoldReason: Equatable {
+    case working
+    /// Agents finished or asked you something; waiting until `until`, or while sessions stay open.
+    case waitingForYou(until: Date?)
+}
+
 enum HoldState: Equatable {
     case disabled
     case paused(until: Date)
@@ -43,6 +50,7 @@ final class AppModel {
     private(set) var battery = Power.battery()
     private(set) var lidControlInstalled = LidControl.isInstalled
     private(set) var holdingSince: Date?
+    private(set) var holdReason: HoldReason = .working
     /// Agents whose CLI is installed, so the menu can list them even when not running.
     private(set) var installedAgents: Set<String> = []
     private(set) var pausedUntil: Date?
@@ -134,15 +142,19 @@ final class AppModel {
         battery = Power.battery()
         sessions = collectSessions(now: now)
 
-        if sessions.contains(where: { $0.state == .working }) { lastWorkingAt = now }
-        let withinGrace = lastWorkingAt.map { now.timeIntervalSince($0) < TimeInterval(prefs.graceMinutes * 60) } ?? false
+        let working = sessions.contains { $0.state == .working }
+        if working { lastWorkingAt = now }
+        // Once every session has closed, there's nothing left to wait for.
+        if sessions.isEmpty { lastWorkingAt = nil }
+        let reason: HoldReason? = working ? .working : waitForYou(now: now)
+        if let reason { holdReason = reason }
 
         let next: HoldState
         if !prefs.enabled {
             next = .disabled
         } else if let until = pausedUntil {
             next = .paused(until: until)
-        } else if !withinGrace {
+        } else if reason == nil {
             next = .idle
         } else if let reason = blocker() {
             next = .blocked(reason)
@@ -150,6 +162,16 @@ final class AppModel {
             next = .holding
         }
         apply(next)
+    }
+
+    /// Keeps waiting after agents finish while a session is still open, up to the limit for the
+    /// current power source, counted from when an agent last worked.
+    private func waitForYou(now: Date) -> HoldReason? {
+        guard let last = lastWorkingAt, !sessions.isEmpty else { return nil }
+        let minutes = battery.onAC ? prefs.pluggedInWaitMinutes : prefs.batteryWaitMinutes
+        if minutes == Preferences.untilSessionsClose { return .waitingForYou(until: nil) }
+        let until = last.addingTimeInterval(TimeInterval(minutes * 60))
+        return until > now ? .waitingForYou(until: until) : nil
     }
 
     private func blocker() -> String? {
@@ -286,12 +308,12 @@ final class AppModel {
     var lidProof: Bool { prefs.lidClosedMode && lidControlInstalled }
 
     var summary: String {
-        switch workingCount {
-        case 0:
-            let minutes = prefs.graceMinutes == 1 ? "1 more minute" : "\(prefs.graceMinutes) more minutes"
-            return "Agents finished. Your Mac stays awake \(minutes)."
-        case 1: return "1 agent working"
-        default: return "\(workingCount) agents working"
+        switch (workingCount, holdReason) {
+        case (0, .waitingForYou(until: nil)): "Waiting for you while agent sessions are open."
+        case (0, .waitingForYou(let until?)):
+            "Waiting for you until \(until.formatted(date: .omitted, time: .shortened))."
+        case (1, _): "1 agent working"
+        default: "\(workingCount) agents working"
         }
     }
 

@@ -104,6 +104,11 @@ struct MenuView: View {
 
     private func statusLine(now: Date) -> String {
         switch model.state {
+        case .holding where model.holdReason != .working:
+            if case .waitingForYou(let until?) = model.holdReason {
+                return "Waiting for you until \(until.formatted(date: .omitted, time: .shortened))"
+            }
+            return "Waiting for you while sessions are open"
         case .holding:
             let seconds = Int(now.timeIntervalSince(model.holdingSince ?? now))
             let elapsed = "\(seconds / 3600)h \(String(format: "%02d", seconds / 60 % 60))m"

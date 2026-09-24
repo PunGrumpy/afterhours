@@ -55,15 +55,35 @@ private struct PowerTab: View {
                 Toggle("Respect Low Power Mode", isOn: $prefs.respectLowPowerMode)
             }
 
-            Section("Behavior") {
-                Picker("Stay awake after agents finish", selection: $prefs.graceMinutes) {
-                    Text("Off").tag(0)
-                    ForEach([1, 2, 5, 10], id: \.self) { Text("\($0) min").tag($0) }
+            Section {
+                Picker("When plugged in", selection: $prefs.pluggedInWaitMinutes) {
+                    Text("Until sessions close").tag(Preferences.untilSessionsClose)
+                    waitChoices([60, 30, 10, 1])
                 }
+                Picker("On battery", selection: $prefs.batteryWaitMinutes) {
+                    waitChoices([120, 60, 30, 10, 1])
+                }
+            } header: {
+                Text("Wait for you after agents finish")
+            } footer: {
+                Text("Keeps your Mac awake while you read and reply, so remote clients like T3 Code or SSH stay connected. The wait counts from when an agent last worked and ends early once every session closes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Display") {
                 Toggle("Turn off the display when agents start", isOn: $prefs.turnDisplayOff)
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private func waitChoices(_ minutes: [Int]) -> some View {
+        ForEach(minutes, id: \.self) { m in
+            Text(m >= 60 ? "\(m / 60) hour\(m == 60 ? "" : "s")" : "\(m) min").tag(m)
+        }
+        Text("Don't wait").tag(0)
     }
 }
 
