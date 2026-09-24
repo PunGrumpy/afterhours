@@ -1,8 +1,10 @@
+import app from "../../macos/package.json";
+
 export const site = {
   author: { name: "PunGrumpy", url: "https://github.com/PunGrumpy" },
   download: "https://github.com/PunGrumpy/afterhours/releases/latest",
   repo: "https://github.com/PunGrumpy/afterhours",
-  version: "0.1",
+  version: app.version,
 };
 
 export type AgentState = "working" | "waiting" | "idle";
