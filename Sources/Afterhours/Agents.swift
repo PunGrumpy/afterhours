@@ -9,31 +9,24 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     let processNames: Set<String>
     /// For agents running under an interpreter (node, python, bun): substrings to look for in argv.
     let argvMarkers: [String]
-    /// Whether the agent reports state through lifecycle hooks we can install.
-    let supportsHooks: Bool
 
     static let all: [AgentKind] = [
         AgentKind(id: "claude", displayName: "Claude Code", processNames: ["claude"],
-                  argvMarkers: ["@anthropic-ai/claude-code", "claude-code/cli"], supportsHooks: true),
-        AgentKind(id: "codex", displayName: "Codex", processNames: ["codex"],
-                  argvMarkers: ["@openai/codex"], supportsHooks: false),
-        AgentKind(id: "opencode", displayName: "OpenCode", processNames: ["opencode"],
-                  argvMarkers: ["opencode-ai"], supportsHooks: false),
+                  argvMarkers: ["@anthropic-ai/claude-code", "claude-code/cli"]),
+        AgentKind(id: "codex", displayName: "Codex", processNames: ["codex"], argvMarkers: ["@openai/codex"]),
+        AgentKind(id: "opencode", displayName: "OpenCode", processNames: ["opencode"], argvMarkers: ["opencode-ai"]),
         // Antigravity CLI replaced Gemini CLI for personal accounts on 2026-06-18.
         // `agy` in a terminal; T3 Code runs it through its ACP server instead.
         AgentKind(id: "antigravity", displayName: "Antigravity CLI", processNames: ["agy", "agy_acp_server.par"],
-                  argvMarkers: [], supportsHooks: false),
+                  argvMarkers: []),
         // Still served to Gemini Code Assist Standard/Enterprise and Google Cloud users.
         AgentKind(id: "gemini", displayName: "Gemini CLI", processNames: ["gemini"],
-                  argvMarkers: ["@google/gemini-cli", "/bin/gemini"], supportsHooks: false),
-        AgentKind(id: "copilot", displayName: "Copilot CLI", processNames: ["copilot"],
-                  argvMarkers: ["@github/copilot"], supportsHooks: false),
-        AgentKind(id: "cursor", displayName: "Cursor CLI", processNames: ["cursor-agent"],
-                  argvMarkers: ["cursor-agent"], supportsHooks: false),
+                  argvMarkers: ["@google/gemini-cli", "/bin/gemini"]),
+        AgentKind(id: "copilot", displayName: "Copilot CLI", processNames: ["copilot"], argvMarkers: ["@github/copilot"]),
+        AgentKind(id: "cursor", displayName: "Cursor CLI", processNames: ["cursor-agent"], argvMarkers: ["cursor-agent"]),
         AgentKind(id: "aider", displayName: "Aider", processNames: ["aider"],
-                  argvMarkers: ["/bin/aider", "aider/main.py", "-m aider"], supportsHooks: false),
-        AgentKind(id: "amp", displayName: "Amp", processNames: ["amp"],
-                  argvMarkers: ["@sourcegraph/amp"], supportsHooks: false),
+                  argvMarkers: ["/bin/aider", "aider/main.py", "-m aider"]),
+        AgentKind(id: "amp", displayName: "Amp", processNames: ["amp"], argvMarkers: ["@sourcegraph/amp"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -62,12 +55,11 @@ struct ActivityTracker {
     struct Detected {
         let pid: Int32
         let kind: AgentKind
-        let cwd: String?
         let lastActive: Date?
     }
 
     /// Fraction of one core (averaged over a sample interval) that counts as activity.
-    var cpuThreshold = 0.03
+    private let cpuThreshold = 0.03
 
     private var lastScan: Date?
     private var cpuByPid: [Int32: UInt64] = [:]
@@ -110,7 +102,7 @@ struct ActivityTracker {
             if elapsed > 0, Double(busyNanos) / 1e9 / elapsed >= cpuThreshold {
                 lastActive[pid] = now
             }
-            return Detected(pid: pid, kind: kind, cwd: Proc.cwd(pid), lastActive: lastActive[pid])
+            return Detected(pid: pid, kind: kind, lastActive: lastActive[pid])
         }
 
         lastScan = now

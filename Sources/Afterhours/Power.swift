@@ -64,8 +64,6 @@ nonisolated enum Power {
 final class IdleSleepAssertion {
     private var id: IOPMAssertionID = 0
 
-    var isHeld: Bool { id != 0 }
-
     func hold(reason: String) {
         guard id == 0 else { return }
         IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,

@@ -39,15 +39,6 @@ public enum Proc {
         return ticks * UInt64(timebase.numer) / UInt64(timebase.denom)
     }
 
-    public static func cwd(_ pid: Int32) -> String? {
-        var info = proc_vnodepathinfo()
-        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
-        return withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in
-            String(cString: raw.bindMemory(to: CChar.self).baseAddress!)
-        }
-    }
-
     /// argv of a process (requires same user; fails silently otherwise).
     public static func arguments(_ pid: Int32) -> [String] {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]

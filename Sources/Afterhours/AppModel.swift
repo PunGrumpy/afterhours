@@ -12,16 +12,10 @@ struct AgentSummary: Identifiable {
     let waiting: Int
 }
 
-struct AgentSession: Identifiable, Equatable {
-    enum Source { case hook, process }
-
-    let id: String
+struct AgentSession {
     let agentId: String
     let agentName: String
-    let project: String?
     let state: AgentState
-    let source: Source
-    let since: Date?
 }
 
 /// Why Afterhours is keeping the Mac awake.
@@ -254,27 +248,16 @@ final class AppModel {
                 state = .idle
             }
             return AgentSession(
-                id: "hook-\(record.agent)-\(record.id)",
                 agentId: record.agent,
                 agentName: AgentKind.named(record.agent)?.displayName ?? record.agent,
-                project: record.cwd.map { ($0 as NSString).lastPathComponent },
-                state: state,
-                source: .hook,
-                since: record.updatedAt
+                state: state
             )
         }
 
         for info in detected where !hookedPids.contains(info.pid) && prefs.detectedAgents.contains(info.kind.id) {
             let active = info.lastActive.map { now.timeIntervalSince($0) < activeWindow } ?? false
-            result.append(AgentSession(
-                id: "proc-\(info.pid)",
-                agentId: info.kind.id,
-                agentName: info.kind.displayName,
-                project: info.cwd.map { ($0 as NSString).lastPathComponent },
-                state: active ? .working : .idle,
-                source: .process,
-                since: info.lastActive
-            ))
+            result.append(AgentSession(agentId: info.kind.id, agentName: info.kind.displayName,
+                                       state: active ? .working : .idle))
         }
 
         return result.sorted { ($0.state.sortKey, $0.agentName) < ($1.state.sortKey, $1.agentName) }
