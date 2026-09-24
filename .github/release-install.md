@@ -1,7 +1,7 @@
 ### Install
 
-1. Download the zip below, unzip it, and move `Afterhours.app` to Applications.
-2. Open it. The app isn't notarized yet, so macOS blocks it the first time. Open **System Settings > Privacy & Security**, scroll down, and click **Open Anyway**.
+1. Download the `.dmg` below, open it, and drag Afterhours to Applications. It runs on Apple silicon and Intel Macs with macOS 14 or later.
+2. Open Afterhours. The app isn't notarized yet, so macOS blocks it the first time. Open **System Settings > Privacy & Security**, scroll down, and click **Open Anyway**.
 3. Follow the [setup steps in the README](https://github.com/PunGrumpy/afterhours#2-keep-it-awake-with-the-lid-closed) to connect your agents.
 
-You need macOS 14 or later.
+The `.zip` holds the same app, and `SHA256SUMS` lists checksums for both files.

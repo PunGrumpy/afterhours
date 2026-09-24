@@ -99,8 +99,7 @@ jobs:
         run: |
           version="$(jq -r .version apps/macos/package.json)"
           tag="@afterhours/macos@$version"
-          zip="Afterhours-$version.zip"
-          ditto -c -k --keepParent apps/macos/build/Afterhours.app "$zip"
+          ./apps/macos/scripts/package-app.sh
           awk -v heading="## $version" '$0 == heading { found = 1; next } /^## / { found = 0 } found' \
             apps/macos/CHANGELOG.md > notes.md
           { echo; cat .github/release-install.md; } >> notes.md
@@ -110,4 +109,4 @@ jobs:
             # Changesets skips the release when the package has no CHANGELOG.md yet.
             gh release create "$tag" --verify-tag --title "Afterhours $version" --notes-file notes.md
           fi
-          gh release upload "$tag" "$zip" --clobber
+          gh release upload "$tag" apps/macos/dist/* --clobber
