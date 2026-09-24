@@ -106,9 +106,13 @@ final class AppModel {
         tick()
     }
 
-    func installLidControl() {
+    func installLidControl() { changeLidControl(LidControl.install) }
+
+    func uninstallLidControl() { changeLidControl(LidControl.uninstall) }
+
+    private func changeLidControl(_ change: () throws -> Void) {
         do {
-            try LidControl.install()
+            try change()
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -116,17 +120,6 @@ final class AppModel {
         lidControlInstalled = LidControl.isInstalled
         sleepDisabledByUs = false
         tick()
-    }
-
-    func uninstallLidControl() {
-        do {
-            try LidControl.uninstall()
-            lastError = nil
-        } catch {
-            lastError = error.localizedDescription
-        }
-        lidControlInstalled = LidControl.isInstalled
-        sleepDisabledByUs = false
     }
 
     // MARK: - Loop
