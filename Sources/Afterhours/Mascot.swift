@@ -22,6 +22,14 @@ enum Mug {
             case .asleep, .alarmed: 0
             }
         }
+
+        /// The body outweighs the handle, so the mug looks off to the left, and without steam it sits low.
+        var opticalOffset: CGPoint {
+            switch self {
+            case .awake, .drowsy: CGPoint(x: 0.022, y: -0.015)
+            case .asleep, .alarmed: CGPoint(x: 0.021, y: -0.13)
+            }
+        }
     }
 
     /// At menu bar sizes the eyes grow and the smile drops out, so the face still reads.
@@ -31,6 +39,7 @@ enum Mug {
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.beginTransparencyLayer(auxiliaryInfo: nil)
             ctx.scaleBy(x: size, y: size)
+            ctx.translateBy(x: mood.opticalOffset.x, y: mood.opticalOffset.y)
             NSColor.black.setFill()
             NSColor.black.setStroke()
             draw(ctx, mood: mood, compact: compact)
