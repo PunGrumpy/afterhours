@@ -4,6 +4,20 @@
   "workspaces": {
     "": {
       "name": "website",
+      "devDependencies": {
+        "turbo": "^2.11.3",
+      },
+    },
+    "apps/macos": {
+      "name": "@afterhours/macos",
+      "version": "0.1.0",
+      "dependencies": {
+        "@afterhours/core": "workspace:*",
+      },
+    },
+    "apps/web": {
+      "name": "@afterhours/web",
+      "version": "0.1.0",
       "dependencies": {
         "class-variance-authority": "^0.7.1",
         "cn": "^0.4.0",
@@ -27,11 +41,21 @@
         "ultracite": "7.12.0",
       },
     },
+    "packages/core": {
+      "name": "@afterhours/core",
+      "version": "0.1.0",
+    },
   },
   "trustedDependencies": [
     "sharp",
   ],
   "packages": {
+    "@afterhours/core": ["@afterhours/core@workspace:packages/core"],
+
+    "@afterhours/macos": ["@afterhours/macos@workspace:apps/macos"],
+
+    "@afterhours/web": ["@afterhours/web@workspace:apps/web"],
+
     "@alloc/quick-lru": ["@alloc/quick-lru@5.3.0", "", {}, "sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA=="],
 
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
@@ -335,6 +359,18 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.3.3", "", { "os": "win32", "cpu": "x64" }, "sha512-yJ0pwIVc/nYeGoV02WtsN8KYyLQv7kyI2wDnkezyJlGGjkd4QLwDGAwl47YpPJeuI0M0ObaXGSPjvWDPeTPggw=="],
 
     "@tailwindcss/postcss": ["@tailwindcss/postcss@4.3.3", "", { "dependencies": { "@alloc/quick-lru": "^5.2.0", "@tailwindcss/node": "4.3.3", "@tailwindcss/oxide": "4.3.3", "postcss": "^8.5.16", "tailwindcss": "4.3.3" } }, "sha512-JTSZZGQi1AyKirbLN3azmjVzef92tcX7h+iSqPdaeStyFpGpDlKvvpxeOE8njhbUanbRwr3z8DyzhICWnMtQeg=="],
+
+    "@turbo/darwin-64": ["@turbo/darwin-64@2.11.3", "", { "os": "darwin", "cpu": "x64" }, "sha512-D4EIKTgPpxFQL5aZNbNqy57XOiRldM+mwP1ME9ZLM4DJoV3oNK7GKyQWVusz1umjiFNmLvunNGw7Jq4RUyYL3A=="],
+
+    "@turbo/darwin-arm64": ["@turbo/darwin-arm64@2.11.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-WOvgWIO86LzBQmL9aRFekROing1CZMVDjmdD7Dk6R65qFAFdrlKkufojenjW1AbUAqytpG6xsXzq8UEScdSdDQ=="],
+
+    "@turbo/linux-64": ["@turbo/linux-64@2.11.3", "", { "os": [ "linux", "android", ], "cpu": "x64" }, "sha512-zIgNl9KkMnsdU54JrnazELatpMJDSktKjD3kjKVliUNMl/5uhFRrqQ+Z1qaACKw/2ybL7xzlsHir9s5q7sYlQg=="],
+
+    "@turbo/linux-arm64": ["@turbo/linux-arm64@2.11.3", "", { "os": [ "linux", "android", ], "cpu": "arm64" }, "sha512-aJToWHx5JYvpPwIrAt1DuYrHWcpQGjGf0XVPRMKQBHou//JUYR6oowHeUZp9Oq7e3XDWA75E37C2GnNaBqCVnA=="],
+
+    "@turbo/windows-64": ["@turbo/windows-64@2.11.3", "", { "os": "win32", "cpu": "x64" }, "sha512-hu5biiwVGdMvHB/vvaoPjtudNBn3TqcsKK2A06ap3O0wnSZwAtTXe92tKTckpecDeVs+IC+4r8s2wXpbdSPWoA=="],
+
+    "@turbo/windows-arm64": ["@turbo/windows-arm64@2.11.3", "", { "os": "win32", "cpu": "arm64" }, "sha512-naDEb/31UmOOJOChi+LebLMKWKa1kId0yig1yTRZzDViDg1lBw1Ptu5iQYCvOfOOrx6swUUucf3zPWuPGWz7Jw=="],
 
     "@types/esrecurse": ["@types/esrecurse@4.3.1", "", {}, "sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw=="],
 
@@ -989,6 +1025,8 @@
     "tsconfig-paths": ["tsconfig-paths@3.15.0", "", { "dependencies": { "@types/json5": "^0.0.29", "json5": "^1.0.2", "minimist": "^1.2.6", "strip-bom": "^3.0.0" } }, "sha512-2Ac2RgzDe/cn48GvOe3M+o82pEFewD3UPbyoUHHdKasHwJKjds4fLXWf/Ux5kATBKN20oaFGu+jbElp1pos0mg=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "turbo": ["turbo@2.11.3", "", { "optionalDependencies": { "@turbo/darwin-64": "2.11.3", "@turbo/darwin-arm64": "2.11.3", "@turbo/linux-64": "2.11.3", "@turbo/linux-arm64": "2.11.3", "@turbo/windows-64": "2.11.3", "@turbo/windows-arm64": "2.11.3" }, "bin": { "turbo": "bin/turbo" } }, "sha512-Pfg2dWNOUPwJYbR+eYAcjoBbo4Kmoc8uQb80hzKrBgNEQtxvwf2ucXG7C28MyLVhV/zJSKvChrR+2CP/BONpoA=="],
 
     "type-check": ["type-check@0.4.0", "", { "dependencies": { "prelude-ls": "^1.2.1" } }, "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew=="],
 

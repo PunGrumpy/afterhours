@@ -1,0 +1,15 @@
+{
+  "name": "afterhours",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.3"
+  },
+  "packageManager": "bun@1.4.2",
+  "ignoreScripts": ["sharp", "unrs-resolver"],
+  "trustedDependencies": ["sharp", "unrs-resolver"]
+}
