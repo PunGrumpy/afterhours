@@ -2,14 +2,38 @@ import AfterhoursCore
 import AppKit
 import SwiftUI
 
-private enum Palette {
-    static let background = Color(red: 28 / 255, green: 28 / 255, blue: 31 / 255).opacity(0.82)
+/// Colors for the dark menu. Text, hairlines, and fills get stronger with Increase Contrast, and
+/// the background turns solid with Reduce Transparency.
+private struct Palette {
     static let blue = Color(red: 10 / 255, green: 132 / 255, blue: 1)
     static let green = Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
     static let orange = Color(red: 1, green: 159 / 255, blue: 10 / 255)
     static let red = Color(red: 1, green: 69 / 255, blue: 58 / 255)
-    static let divider = Color.white.opacity(0.1)
-    static let fill = Color.white.opacity(0.1)
+
+    let contrast: ColorSchemeContrast
+    private var increased: Bool { contrast == .increased }
+
+    var secondaryText: Color { .white.opacity(increased ? 0.85 : 0.55) }
+    var tertiaryText: Color { .white.opacity(increased ? 0.75 : 0.45) }
+    var hairline: Color { .white.opacity(increased ? 0.35 : 0.1) }
+    var fill: Color { .white.opacity(increased ? 0.22 : 0.1) }
+    var hoverFill: Color { .white.opacity(increased ? 0.32 : 0.18) }
+    var track: Color { .white.opacity(increased ? 0.3 : 0.15) }
+    /// How far idle rows recede.
+    var idleRow: Double { increased ? 0.7 : 0.45 }
+
+    static func background(reduceTransparency: Bool) -> Color {
+        Color(red: 28 / 255, green: 28 / 255, blue: 31 / 255).opacity(reduceTransparency ? 1 : 0.82)
+    }
+}
+
+/// Reads the contrast setting and hands back the matching palette.
+private protocol Themed: View {
+    var contrast: ColorSchemeContrast { get }
+}
+
+private extension Themed {
+    var palette: Palette { Palette(contrast: contrast) }
 }
 
 /// Motion tokens. Every animation in the menu uses one of these three, so the menu moves as one
@@ -23,11 +47,13 @@ private enum Motion {
     static let knob = Animation.spring(duration: 0.25, bounce: 0)
 }
 
-struct MenuView: View {
+struct MenuView: View, Themed {
     let model: AppModel
     @Bindable var prefs: Preferences
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorSchemeContrast) var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,13 +89,13 @@ struct MenuView: View {
         }
         .frame(width: 300)
         .foregroundStyle(.white)
-        .background(Palette.background)
+        .background(Palette.background(reduceTransparency: reduceTransparency))
         .background(DarkWindow())
         .animation(Motion.fade, value: model.lastError)
     }
 
     private var divider: some View {
-        Rectangle().fill(Palette.divider).frame(height: 1).padding(.horizontal, 16)
+        Rectangle().fill(palette.hairline).frame(height: 1).padding(.horizontal, 16)
     }
 
     // MARK: Header
@@ -83,7 +109,7 @@ struct MenuView: View {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     Text(statusLine(now: context.date))
                         .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(palette.secondaryText)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                         // Keyed by state, not by the ticking minutes, so only real state changes cross-fade.
@@ -130,12 +156,12 @@ struct MenuView: View {
                 Spacer()
                 Text(model.workingCount == 0 ? "None working" : "\(model.workingCount) working")
                     .font(.system(size: 12.5).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(palette.tertiaryText)
             }
             if summaries.isEmpty {
                 Text("No coding agents found")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(palette.tertiaryText)
             } else {
                 VStack(spacing: 8) {
                     ForEach(summaries) { AgentRow(summary: $0) }
@@ -170,14 +196,15 @@ struct MenuView: View {
 
 /// The mug mascot, in the header. Its steam and face carry the state; the blue fill matches the switch
 /// while it keeps the Mac awake.
-private struct MascotBadge: View {
+private struct MascotBadge: View, Themed {
     let state: HoldState
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         let mood = Mug.Mood(state)
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(state.isHolding ? Palette.blue : Palette.fill)
+                .fill(state.isHolding ? Palette.blue : palette.fill)
             Image(nsImage: Mug.image(mood, size: 26))
                 .renderingMode(.template)
                 .foregroundStyle(.white.opacity(state.isHolding ? 1 : 0.7))
@@ -200,9 +227,10 @@ private struct SectionTitle: View {
     }
 }
 
-private struct BatterySection: View {
+private struct BatterySection: View, Themed {
     let battery: BatteryStatus
     let prefs: Preferences
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -210,7 +238,7 @@ private struct BatterySection: View {
             if let percent = battery.percent {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.15))
+                        Capsule().fill(palette.track)
                         // Width follows the charge with no animation: it updates every few seconds.
                         Capsule().fill(color(percent)).frame(width: geo.size.width * CGFloat(percent) / 100)
                     }
@@ -221,14 +249,14 @@ private struct BatterySection: View {
                     Text(battery.charging ? "\(percent)%, charging" : battery.onAC ? "\(percent)%, plugged in" : "\(percent)% left")
                         .fontWeight(.medium)
                     Spacer()
-                    Text(cutoff).foregroundStyle(.white.opacity(0.45))
+                    Text(cutoff).foregroundStyle(palette.tertiaryText)
                 }
                 .font(.system(size: 12.5).monospacedDigit())
                 .padding(.top, 8)
             } else {
                 Text("On AC power")
                     .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(palette.secondaryText)
                     .padding(.top, 6)
             }
         }
@@ -249,8 +277,9 @@ private struct BatterySection: View {
     }
 }
 
-private struct AgentRow: View {
+private struct AgentRow: View, Themed {
     let summary: AgentSummary
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         HStack(spacing: 12) {
@@ -263,11 +292,11 @@ private struct AgentRow: View {
             } else if summary.waiting > 0 {
                 status("Needs you", dot: Palette.orange)
             } else {
-                Text("Idle").font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.4))
+                Text("Idle").font(.system(size: 12.5)).foregroundStyle(palette.tertiaryText)
             }
         }
         // Idle agents recede by opacity alone, so the change reads without movement.
-        .opacity(isActive ? 1 : 0.45)
+        .opacity(isActive ? 1 : palette.idleRow)
         .animation(Motion.fade, value: isActive)
         .accessibilityElement(children: .combine)
     }
@@ -276,7 +305,7 @@ private struct AgentRow: View {
 
     private func status(_ text: String, dot: Color) -> some View {
         HStack(spacing: 8) {
-            Text(text).font(.system(size: 12.5).monospacedDigit()).foregroundStyle(.white.opacity(0.55))
+            Text(text).font(.system(size: 12.5).monospacedDigit()).foregroundStyle(palette.secondaryText)
             Circle().fill(dot).frame(width: 7, height: 7)
         }
     }
@@ -284,12 +313,13 @@ private struct AgentRow: View {
 
 /// The agent's logo from the bundled `agents/<id>.png`, or a generic tile for agents without one.
 /// Transparent glyph logos sit inset on the tile; full-bleed app-icon logos fill it.
-private struct AgentIcon: View {
+private struct AgentIcon: View, Themed {
     let id: String
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(Palette.fill)
+            RoundedRectangle(cornerRadius: 6).fill(palette.fill)
             if let logo = Self.logo(for: id) {
                 Image(nsImage: logo.image)
                     .resizable()
@@ -304,7 +334,7 @@ private struct AgentIcon: View {
         .frame(width: 22, height: 22)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         // A faint inset edge so dark logos keep their shape on the dark menu.
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
 
@@ -331,10 +361,11 @@ private struct AgentIcon: View {
     }
 }
 
-private struct ChipButton: View {
+private struct ChipButton: View, Themed {
     let title: String
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         Button(action: action) {
@@ -343,7 +374,7 @@ private struct ChipButton: View {
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(hovering ? 0.18 : 0.1)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? palette.hoverFill : palette.fill))
         }
         .buttonStyle(PressScale())
         .onHover { hovering = $0 }  // Instant on purpose: hover fires too often to animate.
@@ -362,11 +393,12 @@ private struct PressScale: ButtonStyle {
 }
 
 /// A row that behaves like a native menu item: the highlight follows the pointer with no transition.
-private struct MenuItem: View {
+private struct MenuItem: View, Themed {
     let title: String
     let shortcut: String
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         Button(action: action) {
@@ -375,7 +407,7 @@ private struct MenuItem: View {
                 Spacer()
                 Text(shortcut)
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(hovering ? 0.8 : 0.4))
+                    .foregroundStyle(hovering ? .white.opacity(0.8) : palette.tertiaryText)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -394,14 +426,15 @@ private struct PillSwitch: ToggleStyle {
     }
 }
 
-private struct PillSwitchBody: View {
+private struct PillSwitchBody: View, Themed {
     @Binding var isOn: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         Button { isOn.toggle() } label: {
             Capsule()
-                .fill(isOn ? Palette.blue : Color.white.opacity(0.2))
+                .fill(isOn ? Palette.blue : palette.hoverFill)
                 .frame(width: 40, height: 24)
                 .overlay {
                     if reduceMotion {
