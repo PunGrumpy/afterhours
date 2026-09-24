@@ -114,7 +114,7 @@ private struct AgentsTab: View {
                     Toggle(kind.displayName, isOn: Binding(
                         get: { prefs.detectedAgents.contains(kind.id) },
                         set: { on in
-                            if on { prefs.detectedAgents.insert(kind.id) } else { prefs.detectedAgents.remove(kind.id) }
+                            if on { prefs.disabledAgents.remove(kind.id) } else { prefs.disabledAgents.insert(kind.id) }
                         }
                     ))
                 }

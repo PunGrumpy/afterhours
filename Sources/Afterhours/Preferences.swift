@@ -17,7 +17,11 @@ final class Preferences {
     var notifications: Bool { didSet { save(notifications, "notifications") } }
     /// A name from /System/Library/Sounds, or "" for silence.
     var sound: String { didSet { save(sound, "sound") } }
-    var detectedAgents: Set<String> { didSet { save(Array(detectedAgents), "detectedAgents") } }
+    /// Agents the user turned process detection off for. Storing the opt-outs, not the opt-ins,
+    /// means agents added in later versions are detected by default.
+    var disabledAgents: Set<String> { didSet { save(Array(disabledAgents).sorted(), "disabledAgents") } }
+
+    var detectedAgents: Set<String> { Set(AgentKind.all.map(\.id)).subtracting(disabledAgents) }
 
     /// Called after any setting changes, so the model can re-evaluate right away.
     @ObservationIgnored var onChange: () -> Void = {}
@@ -34,7 +38,6 @@ final class Preferences {
             "turnDisplayOff": false,
             "notifications": true,
             "sound": "Glass",
-            "detectedAgents": AgentKind.all.map(\.id),
         ])
         enabled = defaults.bool(forKey: "enabled")
         batteryThreshold = defaults.integer(forKey: "batteryThreshold")
@@ -45,7 +48,7 @@ final class Preferences {
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
         sound = defaults.string(forKey: "sound") ?? ""
-        detectedAgents = Set(defaults.stringArray(forKey: "detectedAgents") ?? [])
+        disabledAgents = Set(defaults.stringArray(forKey: "disabledAgents") ?? [])
     }
 
     private func save(_ value: Any, _ key: String) {
