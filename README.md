@@ -14,9 +14,11 @@ Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CL
 
 ## Install
 
-### 1. Build and run
+### 1. Get the app
 
-You need macOS 14 or later and the Xcode Command Line Tools.
+Download the latest zip from [Releases](https://github.com/PunGrumpy/afterhours/releases/latest), unzip it, and move `Afterhours.app` to Applications. The app isn't notarized yet, so the first time you open it, click **Open Anyway** in **System Settings > Privacy & Security**.
+
+To build it yourself instead, you need macOS 14 or later and the Xcode Command Line Tools:
 
 ```bash
 ./apps/macos/scripts/build-app.sh --install
