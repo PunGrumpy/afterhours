@@ -228,15 +228,15 @@ const MenuBar = ({
     <div className="flex items-center gap-4">
       <AppleIcon className="-mt-px size-3.5" />
       <span className="font-semibold">Terminal</span>
-      <span className="hidden gap-4 md:flex">
+      <span className="hidden gap-4 @2xl:flex">
         <span>Shell</span>
         <span>Edit</span>
         <span>View</span>
-        <span className="hidden lg:inline">Window</span>
-        <span className="hidden lg:inline">Help</span>
+        <span className="hidden @3xl:inline">Window</span>
+        <span className="hidden @3xl:inline">Help</span>
       </span>
     </div>
-    <div className="flex items-center gap-3.5">
+    <div className="flex items-center gap-2.5 @md:gap-3.5">
       <button
         type="button"
         onClick={onToggleMenu}
@@ -246,9 +246,15 @@ const MenuBar = ({
       >
         <Mug key={mood} mood={mood} compact className="blur-in size-[18px]" />
       </button>
-      <BatteryIcon percent={BATTERY} className="h-3 w-[25px]" />
-      <WifiIcon className="h-3 w-4" />
-      <span className="tabular-nums">Thu {clock(now)}</span>
+      <BatteryIcon
+        percent={BATTERY}
+        className="hidden h-3 w-[25px] @md:block"
+      />
+      <WifiIcon className="hidden h-3 w-4 @md:block" />
+      <span className="tabular-nums">
+        <span className="hidden @md:inline">Thu </span>
+        {clock(now)}
+      </span>
     </div>
   </div>
 );
@@ -378,7 +384,7 @@ const Menu = ({
     <div
       data-open={open || undefined}
       inert={!open}
-      className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto w-[300px] origin-top [transform:scale(0.97)] rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
+      className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <div
@@ -585,7 +591,7 @@ export const Demo = () => {
               <div className="rounded-t-[3.2cqw] bg-[linear-gradient(180deg,#5a5a5f_0%,#2c2c30_1.2%,#1d1d20_100%)] px-[0.35cqw] pt-[0.35cqw] [backface-visibility:hidden]">
                 <div className="rounded-t-[2.85cqw] bg-black px-[1.6cqw] pt-[1.6cqw] pb-[2.6cqw] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]">
                   <div
-                    className="relative h-[520px] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a] md:aspect-[1.54] md:h-auto md:min-h-[460px]"
+                    className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
                     onPointerDown={(e) => {
                       if (e.target === e.currentTarget) {
                         setMenuOpen(false);
@@ -640,7 +646,7 @@ export const Demo = () => {
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
-        <p className="text-ink/55 text-[14px]">
+        <p className="text-ink/55 text-[14px] text-balance">
           Psst… it’s interactive. Flip the switch, click an agent, or
         </p>
         <button
