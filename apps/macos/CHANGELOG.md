@@ -1,0 +1,15 @@
+# @afterhours/macos
+
+## 0.1.0
+
+The first release of Afterhours, a menu bar app that keeps your Mac awake while coding agents work.
+
+### Features
+
+- Keeps your Mac awake while Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CLI, Cursor CLI, Aider, Amp, Droid, Goose, Kiro CLI, Kilo CLI, OpenClaw, Hermes Agent, or Cline CLI works, and lets it sleep when the last one finishes.
+- Keeps a closed Mac awake on AC power with no setup. On battery, lid-closed mode adds a sudoers rule that allows only `pmset -a disablesleep 0` and `pmset -a disablesleep 1`.
+- Claude Code hooks report when a session is working, waiting for you, or idle. Other agents count as working while their processes use at least 3% of a CPU core.
+- Waits for your reply after agents finish, so remote clients like T3 Code and SSH stay connected: until every session closes when plugged in, and up to 1 hour on battery.
+- Lets your Mac sleep below a battery cutoff, on battery when **Only when plugged in** is on, in Low Power Mode, or at a critical thermal state, and warns you 5% before the cutoff.
+- The menu bar mug shows the state with its steam. Press `⌥⌘L` to turn Afterhours on or off.
+- The menu follows Increase Contrast, Reduce Transparency, and Reduce Motion.
