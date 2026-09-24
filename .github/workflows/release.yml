@@ -92,15 +92,22 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - run: bunx turbo run build --filter=@afterhours/macos
-      - name: Attach the app to the release
+      - name: Publish the app and release notes
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           version="$(jq -r .version apps/macos/package.json)"
           tag="@afterhours/macos@$version"
           zip="Afterhours-$version.zip"
           ditto -c -k --keepParent apps/macos/build/Afterhours.app "$zip"
-          # Changesets skips the release when the package has no CHANGELOG.md yet.
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$tag" --generate-notes
-          gh release upload "$tag" "$zip" --repo "$GITHUB_REPOSITORY" --clobber
+          awk -v heading="## $version" '$0 == heading { found = 1; next } /^## / { found = 0 } found' \
+            apps/macos/CHANGELOG.md > notes.md
+          { echo; cat .github/release-install.md; } >> notes.md
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "Afterhours $version" --notes-file notes.md
+          else
+            # Changesets skips the release when the package has no CHANGELOG.md yet.
+            gh release create "$tag" --verify-tag --title "Afterhours $version" --notes-file notes.md
+          fi
+          gh release upload "$tag" "$zip" --clobber
