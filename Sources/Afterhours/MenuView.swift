@@ -314,7 +314,6 @@ private struct AgentRow: View, Themed {
     }
 }
 
-/// Transparent glyph logos sit inset on the tile; full-bleed app icons fill it.
 private struct AgentIcon: View, Themed {
     let id: String
     @Environment(\.colorSchemeContrast) var contrast
@@ -323,40 +322,29 @@ private struct AgentIcon: View, Themed {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(palette.fill)
             if let logo = Self.logo(for: id) {
-                Image(nsImage: logo.image)
+                Image(nsImage: logo)
+                    .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
-                    .padding(logo.isGlyph ? 3 : 0)
+                    .frame(width: 16, height: 16)
             } else {
                 Image(systemName: "terminal")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
             }
         }
+        .foregroundStyle(.white.opacity(0.9))
         .frame(width: 22, height: 22)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
 
-    private struct Logo {
-        let image: NSImage
-        /// A transparent top-left corner means a glyph, not a full app-icon tile.
-        let isGlyph: Bool
-    }
+    private static var cache: [String: NSImage?] = [:]
 
-    private static var cache: [String: Logo?] = [:]
-
-    private static func logo(for id: String) -> Logo? {
+    private static func logo(for id: String) -> NSImage? {
         if let cached = cache[id] { return cached }
         let logo = Bundle.main.url(forResource: id, withExtension: "png", subdirectory: "agents")
             .flatMap(NSImage.init(contentsOf:))
-            .map { image in
-                let corner = image.representations
-                    .compactMap { $0 as? NSBitmapImageRep }.first?
-                    .colorAt(x: 1, y: 1)?.alphaComponent ?? 1
-                return Logo(image: image, isGlyph: corner < 0.1)
-            }
+        logo?.isTemplate = true
         cache[id] = logo
         return logo
     }
