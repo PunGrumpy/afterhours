@@ -1,7 +1,10 @@
 import app from "../../macos/package.json";
 
 export const site = {
-  author: { name: "PunGrumpy", url: "https://github.com/PunGrumpy" },
+  author: {
+    name: "Noppakorn Kaewsalabnil",
+    url: "https://github.com/PunGrumpy",
+  },
   download: "https://github.com/PunGrumpy/afterhours/releases/latest",
   repo: "https://github.com/PunGrumpy/afterhours",
   version: app.version,
