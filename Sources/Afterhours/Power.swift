@@ -60,17 +60,27 @@ nonisolated enum Power {
     static func displaySleepNow() { run("/usr/bin/pmset", ["displaysleepnow"]) }
 }
 
-/// Keeps the Mac awake while the lid is open.
-final class IdleSleepAssertion {
-    private var id: IOPMAssertionID = 0
+final class SleepAssertion {
+    private var idle: IOPMAssertionID = 0
+    private var system: IOPMAssertionID = 0
 
-    func hold(reason: String) {
-        guard id == 0 else { return }
-        IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
-                                    IOPMAssertionLevel(kIOPMAssertionLevelOn), reason as CFString, &id)
+    /// `PreventSystemSleep` is deprecated but powerd still honors it on AC, keeping a closed Mac awake without root.
+    func hold(reason: String, lidClosed: Bool) {
+        create("PreventUserIdleSystemSleep", reason, &idle)
+        if lidClosed { create("PreventSystemSleep", reason, &system) } else { release(&system) }
     }
 
     func release() {
+        release(&idle)
+        release(&system)
+    }
+
+    private func create(_ type: String, _ reason: String, _ id: inout IOPMAssertionID) {
+        guard id == 0 else { return }
+        IOPMAssertionCreateWithName(type as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), reason as CFString, &id)
+    }
+
+    private func release(_ id: inout IOPMAssertionID) {
         guard id != 0 else { return }
         IOPMAssertionRelease(id)
         id = 0

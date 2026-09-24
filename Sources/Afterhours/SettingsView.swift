@@ -38,7 +38,7 @@ private struct PowerTab: View {
                     LabeledContent("Lid-closed mode") {
                         Button("Install…") { model.installLidControl() }
                     }
-                    Text("macOS ignores keep-awake requests when you close the lid. Installing adds a sudoers rule that allows Afterhours to run only `pmset -a disablesleep 0` and `pmset -a disablesleep 1`. macOS asks for your admin password once.")
+                    Text("When plugged in, a closed Mac stays awake without this. On battery, macOS ignores keep-awake requests when you close the lid. Installing adds a sudoers rule that allows Afterhours to run only `pmset -a disablesleep 0` and `pmset -a disablesleep 1`. macOS asks for an admin password once.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

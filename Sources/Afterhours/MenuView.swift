@@ -61,6 +61,20 @@ struct MenuView: View, Themed {
                     .padding(.bottom, 8)
                     .transition(.opacity)
             }
+            if prefs.lidClosedMode && !model.lidProof {
+                HStack(spacing: 8) {
+                    Text("On battery, closing the lid sleeps your Mac")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ChipButton(title: "Set up…") {
+                        dismiss()
+                        Task { model.installLidControl() }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
             divider
             BatterySection(battery: model.battery, prefs: prefs)
             divider

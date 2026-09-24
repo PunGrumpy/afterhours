@@ -27,7 +27,7 @@ This builds a universal `Afterhours.app`, copies it to `/Applications`, and open
 
 ### 2. Keep it awake with the lid closed
 
-macOS ignores keep-awake requests once you close the lid, so this step needs your admin password once. Open **Settings… > Power** and click **Install…** next to **Lid-closed mode**.
+When plugged in, a closed Mac stays awake without setup. On battery, macOS ignores keep-awake requests once you close the lid, so this step needs an admin password once. Open **Settings… > Power** and click **Install…** next to **Lid-closed mode**.
 
 It adds `/etc/sudoers.d/afterhours`, which allows only `pmset -a disablesleep 0` and `pmset -a disablesleep 1`, nothing else.
 

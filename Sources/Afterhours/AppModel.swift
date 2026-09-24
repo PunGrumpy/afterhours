@@ -53,7 +53,7 @@ final class AppModel {
     /// Agents without hooks count as working for this long after their last CPU activity.
     @ObservationIgnored private let activeWindow: TimeInterval = 45
 
-    @ObservationIgnored private let assertion = IdleSleepAssertion()
+    @ObservationIgnored private let assertion = SleepAssertion()
     @ObservationIgnored private var tracker = ActivityTracker()
     @ObservationIgnored private var lastWorkingAt: Date?
     @ObservationIgnored private var sleepDisabledByUs = false
@@ -186,7 +186,7 @@ final class AppModel {
         state = next
 
         if next.isHolding {
-            assertion.hold(reason: "Afterhours: coding agents are working")
+            assertion.hold(reason: "Afterhours: coding agents are working", lidClosed: prefs.lidClosedMode)
         } else {
             assertion.release()
         }
@@ -290,7 +290,7 @@ final class AppModel {
     }
 
     /// Whether holding survives closing the lid.
-    var lidProof: Bool { prefs.lidClosedMode && lidControlInstalled }
+    var lidProof: Bool { prefs.lidClosedMode && (lidControlInstalled || battery.onAC) }
 
     var summary: String {
         switch (workingCount, holdReason) {
