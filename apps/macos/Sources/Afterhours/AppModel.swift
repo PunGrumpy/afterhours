@@ -149,11 +149,12 @@ final class AppModel {
         apply(next)
         warnIfBatteryLow(next)
         // The quota matters while agents burn it; otherwise opening the menu refreshes on demand.
-        if !prefs.usageLimits {
-            usage.clear()
-        } else if next.isHolding {
-            usage.refresh()
-        }
+        if next.isHolding || !prefs.usageLimits { refreshUsage() }
+    }
+
+    func refreshUsage(minimumAge: TimeInterval = UsageMonitor.interval) {
+        guard prefs.usageLimits else { return usage.clear() }
+        usage.refresh(hubs: prefs.hubs, minimumAge: minimumAge)
     }
 
     /// Warns once per hold, 5 points before the battery cutoff.

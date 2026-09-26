@@ -63,6 +63,8 @@ Change both in **Settings… > Power**.
 
 The menu shows how much of each Claude Code and Codex rate-limit window you've used, and when it resets, so you know before closing the lid whether tonight's work fits. It reads the logins the CLIs already keep, Claude Code's from the Keychain (one per `~/.claude*` config directory) and Codex's from `~/.codex/auth.json`, and asks Anthropic and OpenAI for the numbers when you open the menu and every 5 minutes while agents work. Afterhours never stores or refreshes a login. If one expires, run that CLI once. Turn it off in **Settings… > Agents > Limits**.
 
+If you pool accounts on a [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) hub, add it under **Settings… > Agents > Usage providers** with its URL and management key. Its accounts join the menu, pooled per provider like T3 Code's Limits page: one bar per window with a segment per account. The key is kept in your Keychain, and Afterhours only reads through the hub.
+
 ## Reading the menu bar
 
 The mug's steam shows the state at a glance:

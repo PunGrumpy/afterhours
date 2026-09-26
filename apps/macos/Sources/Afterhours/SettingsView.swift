@@ -1,3 +1,4 @@
+import AfterhoursCore
 import ServiceManagement
 import SwiftUI
 
@@ -9,7 +10,7 @@ struct SettingsView: View {
         TabView {
             PowerTab(model: model, prefs: prefs)
                 .tabItem { Label("Power", systemImage: "bolt.fill") }
-            AgentsTab(prefs: prefs)
+            AgentsTab(model: model, prefs: prefs)
                 .tabItem { Label("Agents", systemImage: "terminal") }
             GeneralTab(prefs: prefs)
                 .tabItem { Label("General", systemImage: "gearshape") }
@@ -88,8 +89,10 @@ private struct PowerTab: View {
 }
 
 private struct AgentsTab: View {
+    let model: AppModel
     @Bindable var prefs: Preferences
     @State private var hookDirs = ClaudeHooks.configDirectories()
+    @State private var addingHub = false
     @State private var refresh = 0
     @State private var error: String?
 
@@ -155,8 +158,106 @@ private struct AgentsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                ForEach($prefs.hubs) { $hub in
+                    LabeledContent {
+                        HStack {
+                            Toggle("Enabled", isOn: $hub.enabled).labelsHidden()
+                            Button("Remove") { remove(hub) }
+                        }
+                    } label: {
+                        Label {
+                            Text(hub.label)
+                            Text(hub.url).font(.caption).foregroundStyle(.secondary)
+                        } icon: {
+                            Image(systemName: "server.rack")
+                        }
+                    }
+                }
+                Button("Add hub…") { addingHub = true }
+            } header: {
+                Text("Usage providers")
+            } footer: {
+                Text("A CLIProxyAPI hub pools several Claude Code or Codex accounts. Its management API lists them and makes the usage calls, so their quotas join the menu, pooled per provider. Afterhours only reads through it and keeps the management key in your Keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $addingHub) { AddHubSheet(model: model, prefs: prefs) }
+        .onChange(of: prefs.hubs.map(\.enabled)) { model.refreshUsage(minimumAge: 0) }
+    }
+
+    private func remove(_ hub: UsageHub) {
+        hub.deleteManagementKey()
+        prefs.hubs.removeAll { $0.id == hub.id }
+        model.refreshUsage(minimumAge: 0)
+    }
+}
+
+/// Checks the hub answers with the key before anything is saved.
+private struct AddHubSheet: View {
+    let model: AppModel
+    @Bindable var prefs: Preferences
+    @Environment(\.dismiss) private var dismiss
+    @State private var label = ""
+    @State private var url = ""
+    @State private var key = ""
+    @State private var status: String?
+    @State private var failed = false
+    @State private var checking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Form {
+                TextField("Label", text: $label, prompt: Text("Team hub"))
+                TextField("URL", text: $url, prompt: Text("https://hub.example.com"))
+                SecureField("Management key", text: $key)
+                if let status {
+                    Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary)
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(checking ? "Checking…" : "Add") { Task { await add() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(checking || url.trimmingCharacters(in: .whitespaces).isEmpty || key.isEmpty)
+            }
+            .padding(20)
+        }
+        .frame(width: 440)
+    }
+
+    private func add() async {
+        checking = true
+        defer { checking = false }
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch await UsageLimits.hubAccountCount(url: trimmedURL, managementKey: trimmedKey) {
+        case .failure(let error):
+            failed = true
+            status = error.message
+            return
+        case .success(0):
+            failed = true
+            status = "The hub answered, but pools no Claude Code or Codex accounts."
+            return
+        case .success:
+            break
+        }
+        let name = label.trimmingCharacters(in: .whitespaces)
+        let hub = UsageHub(label: name.isEmpty ? (URL(string: trimmedURL)?.host ?? trimmedURL) : name, url: trimmedURL)
+        guard hub.saveManagementKey(trimmedKey) else {
+            failed = true
+            status = "Couldn't save the key to your Keychain."
+            return
+        }
+        prefs.hubs.append(hub)
+        model.refreshUsage(minimumAge: 0)
+        dismiss()
     }
 }
 

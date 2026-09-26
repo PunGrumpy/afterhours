@@ -100,7 +100,7 @@ struct MenuView: View, Themed {
         .foregroundStyle(.white)
         .background(Palette.background(reduceTransparency: reduceTransparency))
         .background(MenuWindow {
-            if prefs.usageLimits { model.usage.refresh(minimumAge: UsageMonitor.menuInterval) }
+            if prefs.usageLimits { model.refreshUsage(minimumAge: UsageMonitor.menuInterval) }
         })
         .animation(Motion.fade, value: model.lastError)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
@@ -186,13 +186,13 @@ struct MenuView: View, Themed {
 
     // MARK: Limits
 
-    /// Hidden until a login is found, so Macs without Claude Code or Codex never see it.
-    /// Collapsed, one badge per account shows its fullest window; the row expands to every bar.
+    /// Hidden until a login is found, so Macs without Claude Code or Codex never see it. Accounts
+    /// pool per provider like T3 Code: collapsed, one badge per provider shows its fullest window;
+    /// expanded, each window is one bar with a segment per account.
     @ViewBuilder
     private var limits: some View {
-        let accounts = model.usage.accounts
-        if prefs.usageLimits, !accounts.isEmpty {
-            let providers = Set(accounts.map(\.provider))
+        let pools = ProviderPool.build(model.usage.accounts)
+        if prefs.usageLimits, !pools.isEmpty || !model.usage.snapshot.hubErrors.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 DisclosureRow(expanded: $prefs.limitsExpanded, title: "Limits") {
                     if prefs.limitsExpanded {
@@ -203,15 +203,18 @@ struct MenuView: View, Themed {
                         }
                     } else {
                         HStack(spacing: 10) {
-                            ForEach(accounts) { LimitBadge(account: $0) }
+                            ForEach(pools) { PoolBadge(pool: $0) }
                         }
                     }
                 }
                 if prefs.limitsExpanded {
-                    ForEach(accounts) { account in
-                        UsageAccountRow(account: account, showLocations: accounts.count > providers.count)
+                    ForEach(pools) { PoolRows(pool: $0) }
+                    ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, 16)
@@ -384,15 +387,15 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
     }
 }
 
-/// One account's fullest window, for the collapsed Limits row.
-private struct LimitBadge: View, Themed {
-    let account: UsageAccount
+/// One provider's fullest pooled window, for the collapsed Limits row.
+private struct PoolBadge: View, Themed {
+    let pool: ProviderPool
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         HStack(spacing: 5) {
-            AgentIcon(id: account.provider, size: 18)
-            if let worst = account.windows.max(by: { $0.usedPercent < $1.usedPercent }) {
+            AgentIcon(id: pool.provider, size: 18)
+            if let worst = pool.fullest {
                 Text("\(Int(worst.usedPercent.rounded()))%")
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundStyle(UsageColor.of(worst.usedPercent))
@@ -407,11 +410,8 @@ private struct LimitBadge: View, Themed {
     }
 
     private var label: String {
-        let name = AgentKind.named(account.provider)?.displayName ?? account.provider
-        guard let worst = account.windows.max(by: { $0.usedPercent < $1.usedPercent }) else {
-            return "\(name): \(account.error ?? "unavailable")"
-        }
-        return "\(name): \(worst.label) \(Int(worst.usedPercent.rounded()))% used"
+        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
+        return "\(pool.name): \(worst.label) \(Int(worst.usedPercent.rounded()))% used"
     }
 }
 
@@ -423,45 +423,37 @@ private enum UsageColor {
     }
 }
 
-private struct UsageAccountRow: View, Themed {
-    let account: UsageAccount
-    /// Two logins of one provider show where each lives.
-    let showLocations: Bool
+/// A provider's header, its failures, and one segmented bar per window.
+private struct PoolRows: View, Themed {
+    let pool: ProviderPool
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
-                AgentIcon(id: account.provider)
-                Text(title)
+                AgentIcon(id: pool.provider)
+                Text(pool.plan.map { "\(pool.name) · \($0)" } ?? pool.name)
                     .font(.system(size: 13, weight: .medium))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if showLocations {
-                    Text(account.locations.joined(separator: " "))
-                        .font(.system(size: 11).monospaced())
-                        .foregroundStyle(palette.tertiaryText)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                }
+                Text(pool.accounts.count == 1 ? pool.accounts[0].locations.joined(separator: " ") : "\(pool.accounts.count) accounts")
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(palette.tertiaryText)
+                    .lineLimit(1)
+                    .truncationMode(.head)
             }
-            if let error = account.error {
+            ForEach(pool.errors, id: \.self) { error in
                 Text(error)
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(account.windows) { UsageBar(window: $0) }
+            ForEach(pool.windows) { PoolBar(window: $0) }
         }
-    }
-
-    private var title: String {
-        let name = AgentKind.named(account.provider)?.displayName ?? account.provider
-        return account.plan.map { "\(name) · \($0)" } ?? name
     }
 }
 
-private struct UsageBar: View, Themed {
-    let window: UsageWindow
+private struct PoolBar: View, Themed {
+    let window: ProviderPool.Window
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
@@ -472,10 +464,16 @@ private struct UsageBar: View, Themed {
                     .foregroundStyle(palette.secondaryText)
                     .lineLimit(1)
                     .frame(width: 72, alignment: .leading)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(palette.track)
-                        Capsule().fill(UsageColor.of(window.usedPercent)).frame(width: geo.size.width * window.usedPercent / 100)
+                HStack(spacing: window.segments.count > 1 ? 2 : 0) {
+                    ForEach(Array(window.segments.enumerated()), id: \.offset) { _, used in
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(palette.track).opacity(used == nil ? 0.5 : 1)
+                                if let used {
+                                    Capsule().fill(UsageColor.of(used)).frame(width: geo.size.width * used / 100)
+                                }
+                            }
+                        }
                     }
                 }
                 .frame(height: 5)
