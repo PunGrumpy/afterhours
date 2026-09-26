@@ -128,8 +128,10 @@ Afterhours deletes a session's file when its agent exits.
 Remove the system changes before deleting the app:
 
 1. Click **Settings… > Power > Uninstall** to remove the sudoers rule.
-2. Click **Settings… > Agents > Remove** for each config directory.
-3. Delete the app and `~/Library/Application Support/Afterhours`.
+2. Click **Settings… > Agents > Remove** for each config directory. This leaves a copy of your previous file as `settings.json.afterhours-backup` next to each `settings.json`. Delete it once you're happy with the result.
+3. Click **Settings… > Limits > Remove** next to each hub. This deletes its management key from your Keychain.
+4. Turn off **Settings… > General > Launch at login**.
+5. Delete the app, `~/Library/Application Support/Afterhours`, and its preferences: `defaults delete app.afterhours.local`.
 
 Agent logos in `apps/macos/Resources/agents/` come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and each vendor's own site. They're trademarks of their owners.
 
