@@ -30,36 +30,107 @@ public struct UsageAccount: Sendable, Identifiable, Equatable {
     /// An agent id from `AgentKind`, like "claude" or "codex".
     public let provider: String
     public let plan: String?
-    /// Where the login lives, like "~/.claude-work", so two accounts of one provider tell apart.
+    /// Where the login lives: "~/.claude-work" on this Mac, or the account's email on a hub.
     public var locations: [String]
+    /// The hub that holds the login, or nil for a login on this Mac.
+    public let source: String?
     public let windows: [UsageWindow]
     /// Why nothing could be read, shown instead of the windows.
     public let error: String?
 
-    public var id: String { "\(provider):\(locations.joined(separator: ","))" }
+    public var id: String { "\(source ?? "local"):\(provider):\(locations.joined(separator: ","))" }
 
-    public init(provider: String, plan: String?, locations: [String], windows: [UsageWindow], error: String? = nil) {
+    public init(provider: String, plan: String?, locations: [String], source: String? = nil,
+                windows: [UsageWindow], error: String? = nil) {
         self.provider = provider
         self.plan = plan
         self.locations = locations
+        self.source = source
         self.windows = windows
         self.error = error
     }
 }
 
-/// Reads subscription quotas the way the CLIs do, with the logins they already keep on this Mac.
-/// Read-only: it never refreshes a token, so an expired login asks you to run the CLI once.
+/// A CLIProxyAPI hub that pools subscription accounts. The management key lives in the Keychain.
+public struct UsageHub: Sendable, Codable, Identifiable, Equatable {
+    public var id: String
+    public var label: String
+    public var url: String
+    public var enabled: Bool
+
+    public init(id: String = UUID().uuidString, label: String, url: String, enabled: Bool = true) {
+        self.id = id
+        self.label = label
+        self.url = url
+        self.enabled = enabled
+    }
+
+    public static let keychainService = "Afterhours-hub"
+
+    public var managementKey: String? {
+        KeychainCLI.read(service: Self.keychainService, account: id).flatMap { String(data: $0, encoding: .utf8) }?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public func saveManagementKey(_ key: String) -> Bool {
+        KeychainCLI.write(service: Self.keychainService, account: id, value: key)
+    }
+
+    public func deleteManagementKey() {
+        KeychainCLI.delete(service: Self.keychainService, account: id)
+    }
+}
+
+/// Everything one read found.
+public struct UsageSnapshot: Sendable, Equatable {
+    public var accounts: [UsageAccount]
+    /// Hubs that couldn't be listed, as "label: reason".
+    public var hubErrors: [String]
+
+    public init(accounts: [UsageAccount] = [], hubErrors: [String] = []) {
+        self.accounts = accounts
+        self.hubErrors = hubErrors
+    }
+}
+
+/// Reads subscription quotas the way the CLIs do, with the logins they already keep on this Mac,
+/// plus accounts pooled on CLIProxyAPI hubs. Read-only: it never refreshes a token, so an expired
+/// login asks you to run the CLI once.
 public enum UsageLimits {
     static let timeout: TimeInterval = 10
 
-    /// Every account found, one per login. Claude logins that report identical reset times are one account.
+    /// Every account found, one per login. Logins that report identical shares are one account.
     @concurrent
-    public static func read(claudeConfigDirectories: [URL], codexHome: URL? = nil) async -> [UsageAccount] {
+    public static func read(claudeConfigDirectories: [URL], codexHome: URL? = nil,
+                            hubs: [UsageHub] = []) async -> UsageSnapshot {
         async let claude = readClaude(configDirectories: claudeConfigDirectories)
         async let codex = readCodex(home: codexHome ?? defaultCodexHome)
-        var accounts = await claude
-        if let codex = await codex { accounts.append(codex) }
-        return accounts
+        async let hubbed = readHubs(hubs.filter(\.enabled))
+        var snapshot = UsageSnapshot()
+        for account in await claude { merge(account, into: &snapshot.accounts) }
+        if let codex = await codex { merge(codex, into: &snapshot.accounts) }
+        let (hubAccounts, hubErrors) = await hubbed
+        for account in hubAccounts { merge(account, into: &snapshot.accounts) }
+        snapshot.hubErrors = hubErrors
+        return snapshot
+    }
+
+    private static func merge(_ account: UsageAccount, into accounts: inout [UsageAccount]) {
+        if let index = accounts.firstIndex(where: { sameAccount($0, account) }) {
+            accounts[index].locations.append(contentsOf: account.locations)
+        } else {
+            accounts.append(account)
+        }
+    }
+
+    /// The usage response names no account, but two logins to one report the same shares and reset
+    /// minutes, and two accounts practically never do. Sub-second parts of a reset time vary per call.
+    private static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
+        guard a.provider == b.provider, a.error == nil, b.error == nil, !a.windows.isEmpty else { return false }
+        func key(_ window: UsageWindow) -> (String, Double, Int?) {
+            (window.id, window.usedPercent, window.resetsAt.map { Int(($0.timeIntervalSince1970 / 60).rounded()) })
+        }
+        return a.windows.count == b.windows.count && zip(a.windows, b.windows).allSatisfy { key($0) == key($1) }
     }
 
     // MARK: - Claude Code
@@ -97,6 +168,7 @@ public enum UsageLimits {
     }
 
     static let claudeUsageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+    static let claudeHeaders = ["anthropic-beta": "oauth-2025-04-20"]
 
     private static func readClaude(configDirectories: [URL]) async -> [UsageAccount] {
         var accounts: [UsageAccount] = []
@@ -104,37 +176,23 @@ public enum UsageLimits {
             guard let credentials = claudeCredentials(in: dir),
                   let token = credentials.claudeAiOauth?.accessToken, !token.isEmpty
             else { continue }
-            let location = shortPath(dir)
-            let plan = credentials.claudeAiOauth?.subscriptionType.map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            var request = URLRequest(url: claudeUsageURL, timeoutInterval: timeout)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-            let account: UsageAccount
-            switch await fetch(request, as: ClaudeUsage.self) {
-            case .success(let usage):
-                account = UsageAccount(provider: "claude", plan: plan, locations: [location],
-                                       windows: claudeWindows(usage))
-            case .failure(let error):
-                account = UsageAccount(provider: "claude", plan: plan, locations: [location], windows: [],
-                                       error: error.message(signIn: "Run claude once to refresh its login"))
-            }
-            if let index = accounts.firstIndex(where: { sameAccount($0, account) }) {
-                accounts[index].locations.append(location)
-            } else {
-                accounts.append(account)
-            }
+            let plan = credentials.claudeAiOauth?.subscriptionType.map(capitalized)
+            let result = await fetch(claudeUsageURL, token: token, headers: claudeHeaders)
+            accounts.append(claudeAccount(result, plan: plan, locations: [shortPath(dir)], source: nil))
         }
         return accounts
     }
 
-    /// The usage response names no account, but two logins to one report the same shares and reset
-    /// minutes, and two accounts practically never do. Sub-second parts of a reset time vary per call.
-    private static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
-        guard a.error == nil, b.error == nil, !a.windows.isEmpty else { return false }
-        func key(_ window: UsageWindow) -> (String, Double, Int?) {
-            (window.id, window.usedPercent, window.resetsAt.map { Int(($0.timeIntervalSince1970 / 60).rounded()) })
+    private static func claudeAccount(_ result: Result<Data, FetchError>, plan: String?, locations: [String],
+                                      source: String?) -> UsageAccount {
+        switch result.flatMap({ decode(ClaudeUsage.self, from: $0) }) {
+        case .success(let usage):
+            UsageAccount(provider: "claude", plan: plan, locations: locations, source: source,
+                         windows: claudeWindows(usage))
+        case .failure(let error):
+            UsageAccount(provider: "claude", plan: plan, locations: locations, source: source, windows: [],
+                         error: error.message(signIn: "Run claude once to refresh its login"))
         }
-        return a.windows.count == b.windows.count && zip(a.windows, b.windows).allSatisfy { key($0) == key($1) }
     }
 
     private static func claudeWindows(_ usage: ClaudeUsage) -> [UsageWindow] {
@@ -156,34 +214,19 @@ public enum UsageLimits {
     }
 
     /// Claude Code keeps its login in the Keychain on macOS, under a service named after the config dir.
-    /// The `security` tool created the item, so it may read it back without a permission prompt.
     private static func claudeCredentials(in dir: URL) -> ClaudeCredentials? {
         let path = dir.standardizedFileURL.path
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         var services = ["Claude Code-credentials-\(sha256Prefix(path))"]
         if path == "\(home)/.claude" { services.insert("Claude Code-credentials", at: 0) }
         for service in services {
-            if let data = keychainPassword(service: service),
+            if let data = KeychainCLI.read(service: service),
                let credentials = try? JSONDecoder().decode(ClaudeCredentials.self, from: data) {
                 return credentials
             }
         }
         guard let data = try? Data(contentsOf: dir.appendingPathComponent(".credentials.json")) else { return nil }
         return try? JSONDecoder().decode(ClaudeCredentials.self, from: data)
-    }
-
-    private static func keychainPassword(service: String) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        process.arguments = ["find-generic-password", "-s", service, "-w"]
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { return nil }
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return data
     }
 
     private static func sha256Prefix(_ text: String) -> String {
@@ -220,6 +263,12 @@ public enum UsageLimits {
 
     static let codexUsageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
 
+    static func codexHeaders(accountId: String?) -> [String: String] {
+        var headers = ["User-Agent": "codex-cli", "OpenAI-Beta": "codex-1", "Originator": "Codex Desktop"]
+        if let accountId { headers["ChatGPT-Account-Id"] = accountId }
+        return headers
+    }
+
     static var defaultCodexHome: URL {
         if let home = ProcessInfo.processInfo.environment["CODEX_HOME"], !home.isEmpty {
             return URL(fileURLWithPath: home)
@@ -232,20 +281,21 @@ public enum UsageLimits {
               let auth = try? snakeCaseDecoder.decode(CodexAuth.self, from: data),
               let token = auth.tokens?.accessToken, !token.isEmpty
         else { return nil }
-        let location = shortPath(home)
-        var request = URLRequest(url: codexUsageURL, timeoutInterval: timeout)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("codex-cli", forHTTPHeaderField: "User-Agent")
-        if let accountId = auth.tokens?.accountId ?? auth.tokens?.idToken.flatMap(chatGPTAccountId) {
-            request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-Id")
-        }
-        switch await fetch(request, as: CodexUsage.self) {
+        let accountId = auth.tokens?.accountId ?? auth.tokens?.idToken.flatMap(chatGPTAccountId)
+        let result = await fetch(codexUsageURL, token: token, headers: codexHeaders(accountId: accountId))
+        return codexAccount(result, fallbackPlan: nil, locations: [shortPath(home)], source: nil)
+    }
+
+    private static func codexAccount(_ result: Result<Data, FetchError>, fallbackPlan: String?,
+                                     locations: [String], source: String?) -> UsageAccount {
+        switch result.flatMap({ decode(CodexUsage.self, from: $0) }) {
         case .success(let usage):
-            let plan = usage.planType.map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            return UsageAccount(provider: "codex", plan: plan, locations: [location], windows: codexWindows(usage))
+            UsageAccount(provider: "codex", plan: (usage.planType ?? fallbackPlan).map(capitalized),
+                         locations: locations, source: source, windows: codexWindows(usage))
         case .failure(let error):
-            return UsageAccount(provider: "codex", plan: nil, locations: [location], windows: [],
-                                error: error.message(signIn: "Run codex once to refresh its login"))
+            UsageAccount(provider: "codex", plan: fallbackPlan.map(capitalized), locations: locations,
+                         source: source, windows: [],
+                         error: error.message(signIn: "Run codex once to refresh its login"))
         }
     }
 
@@ -283,6 +333,126 @@ public enum UsageLimits {
         return auth["chatgpt_account_id"] as? String
     }
 
+    // MARK: - CLIProxyAPI hubs
+
+    private struct HubAuthFile: Decodable {
+        struct IdToken: Decodable {
+            let chatgptAccountId: String?
+            let chatgptPlanType: String?
+        }
+
+        let id: String?
+        let authIndex: String
+        let provider: String
+        let email: String?
+        let disabled: Bool?
+        let idToken: IdToken?
+    }
+
+    private struct HubAuthFiles: Decodable { let files: [HubAuthFile] }
+    private struct HubApiResponse: Decodable {
+        let statusCode: Int
+        let body: String
+    }
+
+    public struct HubError: Error, Sendable, Equatable {
+        public let message: String
+    }
+
+    /// How many Claude or Codex accounts the hub pools, so Settings can confirm a key before saving it.
+    @concurrent
+    public static func hubAccountCount(url: String, managementKey: String) async -> Result<Int, HubError> {
+        await hubAccounts(url: url, managementKey: managementKey).map(\.count)
+    }
+
+    private static func readHubs(_ hubs: [UsageHub]) async -> ([UsageAccount], [String]) {
+        var accounts: [UsageAccount] = []
+        var errors: [String] = []
+        for hub in hubs {
+            guard let key = hub.managementKey, !key.isEmpty else {
+                errors.append("\(hub.label): no management key saved")
+                continue
+            }
+            switch await hubAccounts(url: hub.url, managementKey: key) {
+            case .failure(let error):
+                errors.append("\(hub.label): \(error.message)")
+            case .success(let files):
+                accounts += await withTaskGroup(of: UsageAccount.self) { group in
+                    for file in files {
+                        group.addTask { await readHubAccount(file, hub: hub, managementKey: key) }
+                    }
+                    var read: [UsageAccount] = []
+                    for await account in group { read.append(account) }
+                    return read.sorted { $0.locations.first ?? "" < $1.locations.first ?? "" }
+                }
+            }
+        }
+        return (accounts, errors)
+    }
+
+    private static func hubAccounts(url: String, managementKey: String) async -> Result<[HubAuthFile], HubError> {
+        guard let endpoint = hubURL(url, path: "auth-files") else {
+            return .failure(HubError(message: "The hub URL isn't valid"))
+        }
+        var request = URLRequest(url: endpoint, timeoutInterval: timeout)
+        request.setValue("Bearer \(managementKey)", forHTTPHeaderField: "Authorization")
+        switch await send(request).flatMap({ decode(HubAuthFiles.self, from: $0) }) {
+        case .failure(.status(401)), .failure(.status(403)):
+            return .failure(HubError(message: "The hub rejected the management key"))
+        case .failure(let error):
+            return .failure(HubError(message: error.message(signIn: "")))
+        case .success(let list):
+            return .success(list.files.filter { $0.disabled != true && ["claude", "codex"].contains($0.provider) })
+        }
+    }
+
+    private static func readHubAccount(_ file: HubAuthFile, hub: UsageHub, managementKey: String) async -> UsageAccount {
+        let locations = [file.email ?? file.id ?? file.authIndex]
+        if file.provider == "codex" {
+            let headers = codexHeaders(accountId: file.idToken?.chatgptAccountId)
+            let result = await fetchViaHub(hub, managementKey: managementKey, authIndex: file.authIndex,
+                                           url: codexUsageURL, headers: headers)
+            return codexAccount(result, fallbackPlan: file.idToken?.chatgptPlanType, locations: locations,
+                                source: hub.label)
+        }
+        let result = await fetchViaHub(hub, managementKey: managementKey, authIndex: file.authIndex,
+                                       url: claudeUsageURL, headers: claudeHeaders)
+        return claudeAccount(result, plan: nil, locations: locations, source: hub.label)
+    }
+
+    /// The hub makes the provider call with the account's own token in place of `$TOKEN$`.
+    private static func fetchViaHub(_ hub: UsageHub, managementKey: String, authIndex: String, url: URL,
+                                    headers: [String: String]) async -> Result<Data, FetchError> {
+        guard let endpoint = hubURL(hub.url, path: "api-call") else {
+            return .failure(.network("The hub URL isn't valid"))
+        }
+        var header = headers
+        header["Authorization"] = "Bearer $TOKEN$"
+        let body: [String: Any] = ["auth_index": authIndex, "method": "GET", "url": url.absoluteString,
+                                   "header": header]
+        var request = URLRequest(url: endpoint, timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(managementKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return await send(request).flatMap { decode(HubApiResponse.self, from: $0) }.flatMap { response in
+            guard (200 ..< 300).contains(response.statusCode) else { return .failure(.status(response.statusCode)) }
+            return .success(Data(response.body.utf8))
+        }
+    }
+
+    private static func hubURL(_ base: String, path: String) -> URL? {
+        var text = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.contains("://") { text = "https://" + text }
+        guard var components = URLComponents(string: text), let scheme = components.scheme,
+              ["http", "https"].contains(scheme), components.host != nil
+        else { return nil }
+        components.path = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
+        components.path += "/v0/management/\(path)"
+        components.query = nil
+        return components.url
+    }
+
     // MARK: - Shared
 
     enum FetchError: Error {
@@ -292,7 +462,7 @@ public enum UsageLimits {
 
         func message(signIn: String) -> String {
             switch self {
-            case .status(401), .status(403): signIn
+            case .status(401), .status(403): signIn.isEmpty ? "The login was rejected" : signIn
             case .status(let code): "Usage isn't available right now (HTTP \(code))"
             case .network(let text): text
             case .decoding: "Couldn't read the usage response"
@@ -313,7 +483,14 @@ public enum UsageLimits {
         return decoder
     }()
 
-    private static func fetch<T: Decodable>(_ request: URLRequest, as type: T.Type) async -> Result<T, FetchError> {
+    private static func fetch(_ url: URL, token: String, headers: [String: String]) async -> Result<Data, FetchError> {
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+        return await send(request)
+    }
+
+    private static func send(_ request: URLRequest) async -> Result<Data, FetchError> {
         let data: Data
         let response: URLResponse
         do {
@@ -323,8 +500,11 @@ public enum UsageLimits {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200 ..< 300).contains(status) else { return .failure(.status(status)) }
-        guard let value = try? snakeCaseDecoder.decode(T.self, from: data) else { return .failure(.decoding) }
-        return .success(value)
+        return .success(data)
+    }
+
+    private static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> Result<T, FetchError> {
+        (try? snakeCaseDecoder.decode(T.self, from: data)).map(Result.success) ?? .failure(.decoding)
     }
 
     /// Anthropic sends fractional seconds; a formatter parses either way but only one form at a time.
@@ -336,9 +516,44 @@ public enum UsageLimits {
         return formatter.date(from: text)
     }
 
+    private static func capitalized(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
+
     private static func shortPath(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         let path = url.standardizedFileURL.path
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+}
+
+/// Generic passwords through `/usr/bin/security`. Items it creates it may read back without a
+/// permission prompt, which is also how Claude Code stores its own login.
+public enum KeychainCLI {
+    public static func read(service: String, account: String? = nil) -> Data? {
+        var arguments = ["find-generic-password", "-s", service, "-w"]
+        if let account { arguments += ["-a", account] }
+        guard let result = run(arguments), result.0 == 0 else { return nil }
+        return result.1
+    }
+
+    @discardableResult
+    public static func write(service: String, account: String, value: String) -> Bool {
+        run(["add-generic-password", "-U", "-s", service, "-a", account, "-w", value])?.0 == 0
+    }
+
+    public static func delete(service: String, account: String) {
+        _ = run(["delete-generic-password", "-s", service, "-a", account])
+    }
+
+    private static func run(_ arguments: [String]) -> (Int32, Data)? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = arguments
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, data)
     }
 }
