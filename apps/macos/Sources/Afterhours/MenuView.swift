@@ -39,6 +39,8 @@ private enum Motion {
     static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
     /// A spring, so a switch flipped again mid-flight reverses smoothly.
     static let knob = Animation.spring(duration: 0.25, bounce: 0)
+    /// Critically damped: nothing here carries momentum, so nothing overshoots. Reversible mid-flight.
+    static let settle = Animation.spring(duration: 0.35, bounce: 0)
 }
 
 struct MenuView: View, Themed {
@@ -48,6 +50,7 @@ struct MenuView: View, Themed {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorSchemeContrast) var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,7 +107,7 @@ struct MenuView: View, Themed {
         })
         .animation(Motion.fade, value: model.lastError)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
-        .animation(Motion.fade, value: prefs.limitsExpanded)
+        .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
     }
 
     private var divider: some View {
@@ -208,13 +211,18 @@ struct MenuView: View, Themed {
                     }
                 }
                 if prefs.limitsExpanded {
-                    ForEach(pools) { PoolRows(pool: $0) }
-                    ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
-                        Text(error)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Palette.orange)
-                            .fixedSize(horizontal: false, vertical: true)
+                    // Emerges from under the title it belongs to, and goes back the same way.
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(pools) { PoolRows(pool: $0) }
+                        ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .clipped()
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
             }
             .padding(.horizontal, 16)
@@ -369,10 +377,12 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
 
     var body: some View {
         Button { expanded.toggle() } label: {
-            HStack(spacing: 6) {
+            // Symbols at the title's font size sit on its baseline by design; the scale only shrinks the glyph.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 SectionTitle(title)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
+                    .imageScale(.small)
                     .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                 Spacer()
@@ -380,7 +390,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale())
         .onHover { hovering = $0 }
         .accessibilityAddTraits(.isButton)
         .accessibilityValue(expanded ? "Expanded" : "Collapsed")
@@ -435,11 +445,11 @@ private struct PoolRows: View, Themed {
                 Text(pool.plan.map { "\(pool.name) · \($0)" } ?? pool.name)
                     .font(.system(size: 13, weight: .medium))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(pool.accounts.count == 1 ? pool.accounts[0].locations.joined(separator: " ") : "\(pool.accounts.count) accounts")
+                Text(pool.accounts.count == 1 ? pool.accounts[0].locations[0] : "\(pool.accounts.count) accounts")
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(palette.tertiaryText)
                     .lineLimit(1)
-                    .truncationMode(.head)
+                    .truncationMode(.middle)
             }
             ForEach(pool.errors, id: \.self) { error in
                 Text(error)
@@ -457,13 +467,21 @@ private struct PoolBar: View, Themed {
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
+        // Label and numbers on one line, the bar full width below, so account segments stay legible.
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            HStack(spacing: 8) {
-                Text(window.label)
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.secondaryText)
-                    .lineLimit(1)
-                    .frame(width: 72, alignment: .leading)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(window.label)
+                        .foregroundStyle(palette.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text("\(percent)%")
+                        .fontWeight(.medium)
+                    if let reset = reset(now: context.date) {
+                        Text(reset).foregroundStyle(palette.tertiaryText)
+                    }
+                }
+                .font(.system(size: 12).monospacedDigit())
                 HStack(spacing: window.segments.count > 1 ? 2 : 0) {
                     ForEach(Array(window.segments.enumerated()), id: \.offset) { _, used in
                         GeometryReader { geo in
@@ -477,31 +495,23 @@ private struct PoolBar: View, Themed {
                     }
                 }
                 .frame(height: 5)
-                Text("\(percent)%")
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .frame(width: 36, alignment: .trailing)
-                Text(reset(now: context.date))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(palette.tertiaryText)
-                    .lineLimit(1)
-                    .frame(width: 66, alignment: .trailing)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(window.label), \(percent)% used, \(reset(now: context.date))")
+            .accessibilityLabel("\(window.label), \(percent)% used\(reset(now: context.date).map { ", \($0)" } ?? "")")
         }
-        .animation(Motion.fade, value: window.usedPercent)
+        .animation(Motion.settle, value: window.usedPercent)
     }
 
     private var percent: Int { Int(window.usedPercent.rounded()) }
 
     /// Soon as a countdown, otherwise the day and time.
-    private func reset(now: Date) -> String {
-        guard let at = window.resetsAt else { return "" }
+    private func reset(now: Date) -> String? {
+        guard let at = window.resetsAt else { return nil }
         let minutes = Int(at.timeIntervalSince(now) / 60)
         if minutes <= 0 { return "resets now" }
-        if minutes < 60 { return "in \(minutes)m" }
-        if minutes < 24 * 60 { return "in \(minutes / 60)h \(String(format: "%02d", minutes % 60))m" }
-        return at.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+        if minutes < 60 { return "resets in \(minutes)m" }
+        if minutes < 24 * 60 { return "resets in \(minutes / 60)h \(String(format: "%02d", minutes % 60))m" }
+        return "resets \(at.formatted(.dateTime.weekday(.abbreviated).hour().minute()))"
     }
 }
 
@@ -512,7 +522,7 @@ private struct AgentIcon: View, Themed {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: size * 6 / 22).fill(palette.fill)
+            RoundedRectangle(cornerRadius: size * 6 / 22, style: .continuous).fill(palette.fill)
             if let logo = Self.logo(for: id) {
                 Image(nsImage: logo)
                     .renderingMode(.template)
@@ -526,7 +536,7 @@ private struct AgentIcon: View, Themed {
         }
         .foregroundStyle(.white.opacity(0.9))
         .frame(width: size, height: size)
-        .overlay(RoundedRectangle(cornerRadius: size * 6 / 22).strokeBorder(palette.hairline, lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: size * 6 / 22, style: .continuous).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
 
