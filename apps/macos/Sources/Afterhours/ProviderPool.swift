@@ -3,7 +3,7 @@ import Foundation
 
 /// Every account of one provider read together, the way T3 Code's Limits page pools them.
 struct ProviderPool: Identifiable {
-    /// One window across the pool: the mean share used, the soonest reset, and each account's own share.
+    /// One window across the pool: the mean share used, the soonest reset, and each account's own window.
     struct Window: Identifiable {
         let id: String
         let kind: UsageWindow.Kind
@@ -11,9 +11,20 @@ struct ProviderPool: Identifiable {
         let usedPercent: Double
         let resetsAt: Date?
         /// In account order; nil where an account doesn't report this window.
-        let segments: [Double?]
+        let segments: [UsageWindow?]
 
         var leftPercent: Int { Int((100 - usedPercent).rounded()) }
+
+        /// The pool's outlook: mean projected share left and the earliest run-out, over accounts with a pace.
+        func pace(now: Date) -> UsageWindow.Pace? {
+            let paces = segments.compactMap { $0?.pace(now: now) }
+            guard !paces.isEmpty else { return nil }
+            return UsageWindow.Pace(
+                elapsed: paces.map(\.elapsed).reduce(0, +) / Double(paces.count),
+                projectedLeft: paces.map(\.projectedLeft).reduce(0, +) / Double(paces.count),
+                runsOutAt: paces.compactMap(\.runsOutAt).min()
+            )
+        }
     }
 
     let provider: String
@@ -60,12 +71,11 @@ struct ProviderPool: Identifiable {
         }
         return order.map { id in
             let template = first[id]!
-            let segments = accounts.map { $0.windows.first { $0.id == id }?.usedPercent }
-            let present = segments.compactMap { $0 }
-            let resets = accounts.compactMap { $0.windows.first { $0.id == id }?.resetsAt }
+            let segments = accounts.map { $0.windows.first { $0.id == id } }
+            let present = segments.compactMap { $0?.usedPercent }
             return Window(id: id, kind: template.kind, label: template.label,
                           usedPercent: present.reduce(0, +) / Double(max(present.count, 1)),
-                          resetsAt: resets.min(), segments: segments)
+                          resetsAt: segments.compactMap { $0?.resetsAt }.min(), segments: segments)
         }
         .sorted { ($0.kind, order.firstIndex(of: $0.id)!) < ($1.kind, order.firstIndex(of: $1.id)!) }
     }

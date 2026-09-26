@@ -448,7 +448,7 @@ private struct PoolBadge: View, Themed {
             if let worst = pool.fullest {
                 Text("\(worst.leftPercent)%")
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(UsageColor.left(worst.leftPercent))
+                    .foregroundStyle(UsageColor.verdict(worst, now: Date()).color)
             } else {
                 Image(systemName: "exclamationmark.circle")
                     .font(.system(size: 12, weight: .medium))
@@ -465,12 +465,35 @@ private struct PoolBadge: View, Themed {
     }
 }
 
-/// Bars and numbers show what's left, like the battery above them, on the same thresholds.
+/// Bars show what's left, like the battery above them. Their color is a verdict on the whole window:
+/// green while the burn rate lands with room to spare, orange when it lands inside the last tenth,
+/// red when it runs out before the reset. Windows too young to project color by level instead.
 private enum UsageColor {
-    static func left(_ percent: Int) -> Color {
-        if percent < 10 { return Palette.red }
-        if percent < 25 { return Palette.orange }
-        return Palette.green
+    enum Verdict: Int, Comparable {
+        case fine, tight, out
+
+        static func < (lhs: Verdict, rhs: Verdict) -> Bool { lhs.rawValue < rhs.rawValue }
+
+        var color: Color {
+            switch self {
+            case .fine: Palette.green
+            case .tight: Palette.orange
+            case .out: Palette.red
+            }
+        }
+    }
+
+    static func verdict(_ window: UsageWindow, now: Date) -> Verdict {
+        if window.leftPercent.rounded() <= 0 { return .out }
+        if let pace = window.pace(now: now) {
+            return pace.projectedLeft <= 0 ? .out : pace.projectedLeft < 10 ? .tight : .fine
+        }
+        return window.leftPercent < 10 ? .out : window.leftPercent < 25 ? .tight : .fine
+    }
+
+    /// The worst account decides the pool's color.
+    static func verdict(_ window: ProviderPool.Window, now: Date) -> Verdict {
+        window.segments.compactMap { $0.map { verdict($0, now: now) } }.max() ?? .fine
     }
 }
 
@@ -507,51 +530,100 @@ private struct PoolBar: View, Themed {
     let window: ProviderPool.Window
     @Environment(\.colorSchemeContrast) var contrast
 
+    /// Name and outlook above, the bar, then what's left and the reset below, like the battery.
     var body: some View {
-        // Label and numbers on one line, the bar full width below, so account segments stay legible.
-        TimelineView(.periodic(from: .now, by: 60)) { context in
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let now = context.date
+            let verdict = UsageColor.verdict(window, now: now)
+            let pace = window.pace(now: now)
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(window.label)
-                        .foregroundStyle(palette.secondaryText)
+                        .font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    Text("\(window.leftPercent)% left")
-                        .fontWeight(.medium)
-                    if let reset = reset(now: context.date) {
+                    if let note = outlook(pace, verdict: verdict, now: now) {
+                        Text(note)
+                            .font(.system(size: 11).monospacedDigit())
+                            .foregroundStyle(verdict == .fine ? palette.tertiaryText : verdict.color)
+                            .lineLimit(1)
+                    }
+                }
+                HStack(spacing: window.segments.count > 1 ? 2 : 0) {
+                    ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
+                        Segment(window: segment, now: now)
+                    }
+                }
+                .frame(height: 5)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(window.leftPercent)% left").fontWeight(.medium)
+                    Spacer(minLength: 8)
+                    if let reset = reset(now: now) {
                         Text(reset).foregroundStyle(palette.tertiaryText)
                     }
                 }
                 .font(.system(size: 12).monospacedDigit())
-                HStack(spacing: window.segments.count > 1 ? 2 : 0) {
-                    ForEach(Array(window.segments.enumerated()), id: \.offset) { _, used in
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(palette.track).opacity(used == nil ? 0.5 : 1)
-                                if let used {
-                                    let left = Int((100 - used).rounded())
-                                    Capsule().fill(UsageColor.left(left)).frame(width: geo.size.width * (100 - used) / 100)
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(height: 5)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(window.label), \(window.leftPercent)% left\(reset(now: context.date).map { ", \($0)" } ?? "")")
+            .accessibilityLabel(accessibilityLabel(pace: pace, verdict: verdict, now: now))
         }
         .animation(Motion.settle, value: window.usedPercent)
     }
 
-    /// Soon as a countdown, otherwise the day and time.
+    /// One account's share of the bar: what's left, with a mark where even pacing would put it.
+    private struct Segment: View, Themed {
+        let window: UsageWindow?
+        let now: Date
+        @Environment(\.colorSchemeContrast) var contrast
+
+        var body: some View {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(palette.track).opacity(window == nil ? 0.5 : 1)
+                    if let window {
+                        Capsule()
+                            .fill(UsageColor.verdict(window, now: now).color)
+                            .frame(width: geo.size.width * window.leftPercent / 100)
+                        if let pace = window.pace(now: now) {
+                            Rectangle()
+                                .fill(.white.opacity(0.7))
+                                .frame(width: 1.5, height: geo.size.height + 4)
+                                .offset(x: geo.size.width * (1 - pace.elapsed) - 0.75, y: -2)
+                                .blendMode(.plusLighter)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Only speaks up when the outlook isn't plain.
+    private func outlook(_ pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String? {
+        let spent = window.segments.filter { $0.map { $0.leftPercent.rounded() <= 0 } ?? false }.count
+        if spent > 0 {
+            return window.segments.count > 1 ? "\(spent) of \(window.segments.count) at limit" : "Limit reached"
+        }
+        guard let pace else { return nil }
+        if let runsOut = pace.runsOutAt { return "Runs out \(countdown(to: runsOut, now: now))" }
+        if verdict == .tight { return "~\(max(1, Int(pace.projectedLeft.rounded())))% left at reset" }
+        return nil
+    }
+
     private func reset(now: Date) -> String? {
-        guard let at = window.resetsAt else { return nil }
-        let minutes = Int(at.timeIntervalSince(now) / 60)
-        if minutes <= 0 { return "resets now" }
-        if minutes < 60 { return "resets in \(minutes)m" }
-        if minutes < 24 * 60 { return "resets in \(minutes / 60)h \(String(format: "%02d", minutes % 60))m" }
-        return "resets \(at.formatted(.dateTime.weekday(.abbreviated).hour().minute()))"
+        window.resetsAt.map { "Resets \(countdown(to: $0, now: now))" }
+    }
+
+    private func countdown(to date: Date, now: Date) -> String {
+        let minutes = Int(date.timeIntervalSince(now) / 60)
+        if minutes <= 0 { return "now" }
+        if minutes < 60 { return "in \(minutes)m" }
+        if minutes < 24 * 60 { return "in \(minutes / 60)h \(minutes % 60)m" }
+        return "in \(minutes / (24 * 60))d \(minutes % (24 * 60) / 60)h"
+    }
+
+    private func accessibilityLabel(pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String {
+        [window.label, "\(window.leftPercent)% left", reset(now: now), outlook(pace, verdict: verdict, now: now)]
+            .compactMap { $0 }.joined(separator: ", ")
     }
 }
 

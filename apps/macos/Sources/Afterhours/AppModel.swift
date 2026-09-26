@@ -121,7 +121,7 @@ final class AppModel {
         return UsageSnapshot(accounts: [
             claude(["~/.claude", "~/.claude-nipa"], 2, 70, 100, hours: 1.3),
             claude(["~/.claude-pun"], 8, 50, 58, hours: 2.1),
-            claude(["team@example.com"], source: "Thaipass", 40, 91, 72, hours: 0.4),
+            claude(["team@example.com"], source: "Thaipass", 60, 91, 72, hours: 4.0),
             UsageAccount(provider: "codex", plan: "Pro", locations: ["~/.codex"], windows: [
                 window("primary", .session, "Session", 12, hours: 3.7),
                 window("secondary", .weekly, "Weekly", 34, hours: 88),
