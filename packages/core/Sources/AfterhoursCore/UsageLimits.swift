@@ -159,7 +159,7 @@ public enum UsageLimits {
         return snapshot
     }
 
-    private static func merge(_ account: UsageAccount, into accounts: inout [UsageAccount]) {
+    static func merge(_ account: UsageAccount, into accounts: inout [UsageAccount]) {
         if let index = accounts.firstIndex(where: { sameAccount($0, account) }) {
             accounts[index].locations.append(contentsOf: account.locations)
         } else {
@@ -169,7 +169,7 @@ public enum UsageLimits {
 
     /// The usage response names no account, but two logins to one report the same shares and reset
     /// minutes, and two accounts practically never do. Sub-second parts of a reset time vary per call.
-    private static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
+    static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
         guard a.provider == b.provider, a.error == nil, b.error == nil, !a.windows.isEmpty else { return false }
         func key(_ window: UsageWindow) -> (String, Double, Int?) {
             (window.id, window.usedPercent, window.resetsAt.map { Int(($0.timeIntervalSince1970 / 60).rounded()) })
@@ -227,8 +227,8 @@ public enum UsageLimits {
         return accounts
     }
 
-    private static func claudeAccount(_ result: Result<Data, FetchError>, plan: String?, locations: [String],
-                                      source: String?) -> UsageAccount {
+    static func claudeAccount(_ result: Result<Data, FetchError>, plan: String?, locations: [String],
+                              source: String?) -> UsageAccount {
         switch result.flatMap({ decode(ClaudeUsage.self, from: $0) }) {
         case .success(let usage):
             UsageAccount(provider: "claude", plan: plan, locations: locations, source: source,
@@ -330,8 +330,8 @@ public enum UsageLimits {
         return codexAccount(result, fallbackPlan: nil, locations: [shortPath(home)], source: nil)
     }
 
-    private static func codexAccount(_ result: Result<Data, FetchError>, fallbackPlan: String?,
-                                     locations: [String], source: String?) -> UsageAccount {
+    static func codexAccount(_ result: Result<Data, FetchError>, fallbackPlan: String?,
+                             locations: [String], source: String?) -> UsageAccount {
         switch result.flatMap({ decode(CodexUsage.self, from: $0) }) {
         case .success(let usage):
             UsageAccount(provider: "codex", plan: (usage.planType ?? fallbackPlan).map(capitalized),
@@ -365,7 +365,7 @@ public enum UsageLimits {
     }
 
     /// The workspace id lives in the id token's `https://api.openai.com/auth` claim.
-    private static func chatGPTAccountId(_ jwt: String) -> String? {
+    static func chatGPTAccountId(_ jwt: String) -> String? {
         let parts = jwt.split(separator: ".")
         guard parts.count == 3 else { return nil }
         var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
@@ -485,7 +485,7 @@ public enum UsageLimits {
         }
     }
 
-    private static func hubURL(_ base: String, path: String) -> URL? {
+    static func hubURL(_ base: String, path: String) -> URL? {
         var text = base.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.contains("://") { text = "https://" + text }
         guard var components = URLComponents(string: text), let scheme = components.scheme,

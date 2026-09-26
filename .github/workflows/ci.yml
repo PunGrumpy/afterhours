@@ -32,10 +32,18 @@ jobs:
       - run: bun run check
       - name: Find affected apps
         id: affected
+        shell: bash
         env:
           TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          names="$(bunx turbo ls --affected --output=json 2>/dev/null | jq -r '.packages.items[].name')"
+          set -euo pipefail
+          if [[ -z "$TURBO_SCM_BASE" || "$TURBO_SCM_BASE" =~ ^0+$ ]] || ! git cat-file -e "$TURBO_SCM_BASE" 2>/dev/null; then
+            # No usable base (new branch, force push): build everything rather than nothing.
+            echo "macos=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          names="$(bunx turbo ls --affected --output=json | jq -r '.packages.items[].name')"
           for app in macos web; do
             if grep -qx "@afterhours/$app" <<<"$names"; then echo "$app=true"; else echo "$app=false"; fi >> "$GITHUB_OUTPUT"
           done
@@ -71,4 +79,5 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      - run: swift test --package-path packages/core
       - run: bunx turbo run build --filter=@afterhours/macos
