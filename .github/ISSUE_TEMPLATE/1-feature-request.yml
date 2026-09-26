@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement, or ask for another agent or usage provider
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping shape Afterhours. Please [search](https://github.com/PunGrumpy/afterhours/issues) first in case someone already asked.
+
+  - type: textarea
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation, not the solution. When does Afterhours get in your way, or leave you guessing?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What would you like to happen?
+      description: If you have a proposal, describe it. Mockups and examples from other apps are welcome.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Agent or provider
+      description: If this is about supporting another tool, name it and link to where it keeps its login or reports its usage.
+      placeholder: "Gemini CLI, ~/.gemini/oauth_creds.json"
