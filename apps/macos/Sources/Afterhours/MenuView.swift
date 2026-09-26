@@ -46,6 +46,8 @@ private enum Motion {
 struct MenuView: View, Themed {
     let model: AppModel
     @Bindable var prefs: Preferences
+    /// Rendering to an image: no window to watch, and the window's own chrome is drawn here instead.
+    var snapshot = false
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorSchemeContrast) var contrast
@@ -101,10 +103,20 @@ struct MenuView: View, Themed {
         }
         .frame(width: 300)
         .foregroundStyle(.white)
-        .background(Palette.background(reduceTransparency: reduceTransparency))
-        .background(MenuWindow {
-            if prefs.usageLimits { model.refreshUsage(minimumAge: UsageMonitor.menuInterval) }
-        })
+        .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
+        .background {
+            if !snapshot {
+                MenuWindow { if prefs.usageLimits { model.refreshUsage(minimumAge: UsageMonitor.menuInterval) } }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))
+        .overlay {
+            if snapshot {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(palette.hairline, lineWidth: 1)
+            }
+        }
+        .padding(snapshot ? 24 : 0)
+        .background(snapshot ? Color(red: 0.16, green: 0.18, blue: 0.24) : .clear)
         .animation(Motion.fade, value: model.lastError)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
         .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
@@ -212,7 +224,7 @@ struct MenuView: View, Themed {
                 }
                 if prefs.limitsExpanded {
                     // Emerges from under the title it belongs to, and goes back the same way.
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
                         ForEach(pools) { PoolRows(pool: $0) }
                         ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
                             Text(error)
@@ -397,7 +409,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
     }
 }
 
-/// One provider's fullest pooled window, for the collapsed Limits row.
+/// One provider's emptiest pooled window, for the collapsed Limits row.
 private struct PoolBadge: View, Themed {
     let pool: ProviderPool
     @Environment(\.colorSchemeContrast) var contrast
@@ -406,9 +418,9 @@ private struct PoolBadge: View, Themed {
         HStack(spacing: 5) {
             AgentIcon(id: pool.provider, size: 18)
             if let worst = pool.fullest {
-                Text("\(Int(worst.usedPercent.rounded()))%")
+                Text("\(worst.leftPercent)%")
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(UsageColor.of(worst.usedPercent))
+                    .foregroundStyle(UsageColor.left(worst.leftPercent))
             } else {
                 Image(systemName: "exclamationmark.circle")
                     .font(.system(size: 12, weight: .medium))
@@ -421,14 +433,15 @@ private struct PoolBadge: View, Themed {
 
     private var label: String {
         guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
-        return "\(pool.name): \(worst.label) \(Int(worst.usedPercent.rounded()))% used"
+        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
     }
 }
 
+/// Bars and numbers show what's left, like the battery above them, on the same thresholds.
 private enum UsageColor {
-    static func of(_ percent: Double) -> Color {
-        if percent >= 90 { return Palette.red }
-        if percent >= 75 { return Palette.orange }
+    static func left(_ percent: Int) -> Color {
+        if percent < 10 { return Palette.red }
+        if percent < 25 { return Palette.orange }
         return Palette.green
     }
 }
@@ -439,7 +452,7 @@ private struct PoolRows: View, Themed {
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 AgentIcon(id: pool.provider)
                 Text(pool.plan.map { "\(pool.name) · \($0)" } ?? pool.name)
@@ -475,7 +488,7 @@ private struct PoolBar: View, Themed {
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    Text("\(percent)%")
+                    Text("\(window.leftPercent)% left")
                         .fontWeight(.medium)
                     if let reset = reset(now: context.date) {
                         Text(reset).foregroundStyle(palette.tertiaryText)
@@ -488,7 +501,8 @@ private struct PoolBar: View, Themed {
                             ZStack(alignment: .leading) {
                                 Capsule().fill(palette.track).opacity(used == nil ? 0.5 : 1)
                                 if let used {
-                                    Capsule().fill(UsageColor.of(used)).frame(width: geo.size.width * used / 100)
+                                    let left = Int((100 - used).rounded())
+                                    Capsule().fill(UsageColor.left(left)).frame(width: geo.size.width * (100 - used) / 100)
                                 }
                             }
                         }
@@ -497,12 +511,10 @@ private struct PoolBar: View, Themed {
                 .frame(height: 5)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(window.label), \(percent)% used\(reset(now: context.date).map { ", \($0)" } ?? "")")
+            .accessibilityLabel("\(window.label), \(window.leftPercent)% left\(reset(now: context.date).map { ", \($0)" } ?? "")")
         }
         .animation(Motion.settle, value: window.usedPercent)
     }
-
-    private var percent: Int { Int(window.usedPercent.rounded()) }
 
     /// Soon as a countdown, otherwise the day and time.
     private func reset(now: Date) -> String? {

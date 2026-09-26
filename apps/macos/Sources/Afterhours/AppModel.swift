@@ -35,7 +35,7 @@ enum HoldState: Equatable {
 
 @Observable
 final class AppModel {
-    let prefs = Preferences()
+    let prefs: Preferences
     let usage = UsageMonitor()
 
     private(set) var sessions: [AgentSession] = []
@@ -62,6 +62,7 @@ final class AppModel {
     @ObservationIgnored private var hotKey: HotKey?
 
     init() {
+        prefs = Preferences()
         // Recover from a previous crash that left lid sleep disabled.
         if Power.sleepDisabled, LidControl.isInstalled { LidControl.setSleepDisabled(false) }
         try? ClaudeHooks.installHookBinary()
@@ -88,6 +89,44 @@ final class AppModel {
             let installed = await AgentKind.findInstalled()
             self?.installedAgents = installed
         }
+    }
+
+    /// A model with sample state and no side effects, for rendering the menu outside the app.
+    init(preview: Preferences) {
+        prefs = preview
+        state = .holding
+        holdingSince = Date().addingTimeInterval(-83 * 60)
+        installedAgents = ["claude", "codex", "opencode"]
+        sessions = [
+            AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
+            AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
+            AgentSession(agentId: "codex", agentName: "Codex", state: .idle),
+        ]
+        usage.seed(Self.sampleUsage)
+    }
+
+    private static var sampleUsage: UsageSnapshot {
+        let now = Date()
+        func window(_ id: String, _ kind: UsageWindow.Kind, _ label: String, _ used: Double, hours: Double) -> UsageWindow {
+            UsageWindow(id: id, kind: kind, label: label, usedPercent: used, resetsAt: now.addingTimeInterval(hours * 3600))
+        }
+        func claude(_ locations: [String], source: String? = nil, _ session: Double, _ weekly: Double, _ fable: Double,
+                    hours: Double) -> UsageAccount {
+            UsageAccount(provider: "claude", plan: "Max", locations: locations, source: source, windows: [
+                window("five_hour", .session, "Session", session, hours: hours),
+                window("seven_day", .weekly, "Weekly", weekly, hours: 20 + hours),
+                window("seven_day_fable", .weekly, "Weekly · Fable", fable, hours: 20 + hours),
+            ])
+        }
+        return UsageSnapshot(accounts: [
+            claude(["~/.claude", "~/.claude-nipa"], 2, 70, 100, hours: 1.3),
+            claude(["~/.claude-pun"], 8, 50, 58, hours: 2.1),
+            claude(["team@example.com"], source: "Thaipass", 40, 91, 72, hours: 0.4),
+            UsageAccount(provider: "codex", plan: "Pro", locations: ["~/.codex"], windows: [
+                window("primary", .session, "Session", 12, hours: 3.7),
+                window("secondary", .weekly, "Weekly", 34, hours: 88),
+            ]),
+        ], hubErrors: ["Spare hub: The hub rejected the management key"])
     }
 
     // MARK: - Actions

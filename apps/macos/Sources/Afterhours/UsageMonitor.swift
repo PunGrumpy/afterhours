@@ -39,6 +39,12 @@ final class UsageMonitor {
         }
     }
 
+    /// Sample data for previews and snapshots.
+    func seed(_ snapshot: UsageSnapshot) {
+        self.snapshot = snapshot
+        checkedAt = Date()
+    }
+
     func clear() {
         snapshot = UsageSnapshot()
         checkedAt = nil

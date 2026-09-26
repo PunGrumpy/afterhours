@@ -31,9 +31,10 @@ final class Preferences {
     var detectedAgents: Set<String> { Set(AgentKind.all.map(\.id)).subtracting(disabledAgents) }
 
     @ObservationIgnored var onChange: () -> Void = {}
-    @ObservationIgnored private let defaults = UserDefaults.standard
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         defaults.register(defaults: [
             "enabled": true,
             "batteryThreshold": 15,
