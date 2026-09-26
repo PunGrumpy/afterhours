@@ -1,10 +1,11 @@
 "use client";
 
 import { cn } from "cn";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AgentLogo } from "./agent-logo";
+import { Limits } from "./demo-limits";
 import { AppleIcon, BatteryIcon, WifiIcon } from "./icons";
 import { Mug } from "./mug";
 import type { Mood } from "./mug";
@@ -355,6 +356,10 @@ interface MenuProps {
   enabled: boolean;
   paused: boolean;
   list: DemoAgent[];
+  limitsOpen: boolean;
+  elapsed: number;
+  asOf: string;
+  onToggleLimits: () => void;
   onToggle: () => void;
   onPause: (minutes: number) => void;
   onResume: () => void;
@@ -369,6 +374,10 @@ const Menu = ({
   enabled,
   paused,
   list,
+  limitsOpen,
+  elapsed,
+  asOf,
+  onToggleLimits,
   onToggle,
   onPause,
   onResume,
@@ -378,12 +387,14 @@ const Menu = ({
   const holding = hold === "working" || hold === "waiting";
   const mood = moodFor[hold];
   const workingCount = list.filter((a) => a.state === "working").length;
+  const scroller = useRef<HTMLDivElement>(null);
 
   return (
     <div
+      ref={scroller}
       data-open={open || undefined}
       inert={!open}
-      className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
+      className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <div
@@ -441,6 +452,15 @@ const Menu = ({
           ))}
         </ul>
       </section>
+
+      <Divider />
+      <Limits
+        expanded={limitsOpen}
+        elapsed={elapsed}
+        asOf={asOf}
+        menu={scroller}
+        onToggle={onToggleLimits}
+      />
 
       <Divider />
       <section className="flex items-center justify-between px-4 py-2.5">
@@ -531,6 +551,7 @@ export const Demo = () => {
   const [enabled, setEnabled] = useState(true);
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [list, setList] = useState(initialAgents);
+  const [limitsOpen, setLimitsOpen] = useState(false);
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
 
@@ -612,6 +633,10 @@ export const Demo = () => {
                       enabled={enabled}
                       paused={paused}
                       list={list}
+                      limitsOpen={limitsOpen}
+                      elapsed={elapsed}
+                      asOf={clock(now - (elapsed % 5))}
+                      onToggleLimits={() => setLimitsOpen((open) => !open)}
                       onToggle={() => setEnabled((on) => !on)}
                       onPause={(minutes) => setPausedUntil(now + minutes)}
                       onResume={() => setPausedUntil(null)}
