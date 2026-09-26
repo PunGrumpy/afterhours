@@ -285,13 +285,17 @@ final class AppModel {
         let hookedAgents = Set(records.map(\.agent))
         let detected = tracker.scan(enabled: prefs.detectedAgents.union(hookedAgents))
         let activity = Dictionary(detected.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
-        let hookedPids = Set(records.compactMap(\.pid))
+        let hookedRoots = Set(records.compactMap { record in
+            record.pid.flatMap { trackedRoot(of: $0, agent: record.agent, in: activity) }
+        })
 
         var result: [AgentSession] = records.map { record in
             var state = record.state
-            if state == .working, let pid = record.pid, let info = activity[pid],
-               now.timeIntervalSince(max(info.lastActive ?? .distantPast, record.updatedAt)) > stuckAfter {
-                state = .idle
+            if state == .working {
+                // Without a tracker entry, the hook's timestamps are all there is; every tool call refreshes them.
+                let lastActive = record.pid.flatMap { trackedRoot(of: $0, agent: record.agent, in: activity) }
+                    .flatMap { activity[$0]?.lastActive } ?? .distantPast
+                if now.timeIntervalSince(max(lastActive, record.updatedAt)) > stuckAfter { state = .idle }
             }
             return AgentSession(
                 agentId: record.agent,
@@ -300,13 +304,24 @@ final class AppModel {
             )
         }
 
-        for info in detected where !hookedPids.contains(info.pid) && prefs.detectedAgents.contains(info.kind.id) {
+        for info in detected where !hookedRoots.contains(info.pid) && prefs.detectedAgents.contains(info.kind.id) {
             let active = info.lastActive.map { now.timeIntervalSince($0) < activeWindow } ?? false
             result.append(AgentSession(agentId: info.kind.id, agentName: info.kind.displayName,
                                        state: active ? .working : .idle))
         }
 
         return result.sorted { ($0.state.sortKey, $0.agentName) < ($1.state.sortKey, $1.agentName) }
+    }
+
+    /// The hook reports its own parent, which can sit below the pid the tracker chose as the agent's root.
+    private func trackedRoot(of pid: Int32, agent: String, in activity: [Int32: ActivityTracker.Detected]) -> Int32? {
+        var current = pid
+        for _ in 0..<8 {
+            if activity[current]?.kind.id == agent { return current }
+            guard let parent = Proc.parent(current), parent > 1 else { return nil }
+            current = parent
+        }
+        return nil
     }
 
     /// Reads hook session files, deleting ones whose agent process has exited.
