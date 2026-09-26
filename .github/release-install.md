@@ -4,4 +4,6 @@
 2. Open Afterhours. The app isn't notarized yet, so macOS blocks it the first time. Open **System Settings > Privacy & Security**, scroll down, and click **Open Anyway**.
 3. Follow the [setup steps in the README](https://github.com/PunGrumpy/afterhours#2-keep-it-awake-with-the-lid-closed) to connect your agents.
 
+With Homebrew, `brew install --cask pungrumpy/tap/afterhours` does step 1 for you.
+
 The `.zip` holds the same app, and `SHA256SUMS` lists checksums for both files.
