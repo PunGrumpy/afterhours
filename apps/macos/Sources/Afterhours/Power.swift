@@ -31,6 +31,9 @@ nonisolated enum Power {
 
     static var lidClosed: Bool { rootDomainProperty("AppleClamshellState") as? Bool ?? false }
 
+    /// False in clamshell mode, when an external display makes a closed lid a normal desk setup.
+    static var lidClosedWouldSleep: Bool { rootDomainProperty("AppleClamshellCausesSleep") as? Bool ?? true }
+
     /// Reflects `pmset disablesleep`.
     static var sleepDisabled: Bool { rootDomainProperty("SleepDisabled") as? Bool ?? false }
 
