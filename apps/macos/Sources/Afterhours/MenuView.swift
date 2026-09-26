@@ -18,6 +18,7 @@ private struct Palette {
     var fill: Color { .white.opacity(increased ? 0.22 : 0.1) }
     var hoverFill: Color { .white.opacity(increased ? 0.32 : 0.18) }
     var track: Color { .white.opacity(increased ? 0.3 : 0.15) }
+    var card: Color { .white.opacity(increased ? 0.14 : 0.06) }
     var idleRow: Double { increased ? 0.7 : 0.45 }
 
     static func background(reduceTransparency: Bool) -> Color {
@@ -474,9 +475,10 @@ private enum UsageColor {
 
         static func < (lhs: Verdict, rhs: Verdict) -> Bool { lhs.rawValue < rhs.rawValue }
 
+        /// Blue like the system's own usage meters, so quota never reads as battery.
         var color: Color {
             switch self {
-            case .fine: Palette.green
+            case .fine: Palette.blue
             case .tight: Palette.orange
             case .out: Palette.red
             }
@@ -502,26 +504,37 @@ private struct PoolRows: View, Themed {
     let pool: ProviderPool
     @Environment(\.colorSchemeContrast) var contrast
 
+    /// The provider names the card; the meters live inside it.
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 AgentIcon(id: pool.provider)
-                Text(pool.plan.map { "\(pool.name) · \($0)" } ?? pool.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+                    .padding(.trailing, 4)
+                Text(pool.name).font(.system(size: 13, weight: .semibold))
+                if let plan = pool.plan {
+                    Text(plan).font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
+                }
+                Spacer(minLength: 8)
                 Text(pool.accounts.count == 1 ? pool.accounts[0].locations[0] : "\(pool.accounts.count) accounts")
-                    .font(.system(size: 11).monospacedDigit())
+                    .font(.system(size: 12).monospacedDigit())
                     .foregroundStyle(palette.tertiaryText)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            ForEach(pool.errors, id: \.self) { error in
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(pool.windows) { PoolBar(window: $0) }
+                ForEach(pool.errors, id: \.self) { error in
+                    Text(error)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            ForEach(pool.windows) { PoolBar(window: $0) }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.card))
         }
     }
 }
@@ -539,30 +552,29 @@ private struct PoolBar: View, Themed {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(window.label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if let note = outlook(pace, verdict: verdict, now: now) {
                         Text(note)
-                            .font(.system(size: 11).monospacedDigit())
+                            .font(.system(size: 12).monospacedDigit())
                             .foregroundStyle(verdict == .fine ? palette.tertiaryText : verdict.color)
                             .lineLimit(1)
                     }
                 }
-                HStack(spacing: window.segments.count > 1 ? 2 : 0) {
+                HStack(spacing: window.segments.count > 1 ? 3 : 0) {
                     ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
                         Segment(window: segment, now: now)
                     }
                 }
-                .frame(height: 5)
+                .frame(height: 6)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(window.leftPercent)% left").fontWeight(.medium)
+                    Text("\(window.leftPercent)% left").font(.system(size: 13).monospacedDigit())
                     Spacer(minLength: 8)
                     if let reset = reset(now: now) {
-                        Text(reset).foregroundStyle(palette.tertiaryText)
+                        Text(reset).font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.tertiaryText)
                     }
                 }
-                .font(.system(size: 12).monospacedDigit())
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel(pace: pace, verdict: verdict, now: now))
@@ -585,11 +597,10 @@ private struct PoolBar: View, Themed {
                             .fill(UsageColor.verdict(window, now: now).color)
                             .frame(width: geo.size.width * window.leftPercent / 100)
                         if let pace = window.pace(now: now) {
-                            Rectangle()
-                                .fill(.white.opacity(0.7))
-                                .frame(width: 1.5, height: geo.size.height + 4)
-                                .offset(x: geo.size.width * (1 - pace.elapsed) - 0.75, y: -2)
-                                .blendMode(.plusLighter)
+                            Capsule()
+                                .fill(.white.opacity(0.85))
+                                .frame(width: 2, height: geo.size.height + 4)
+                                .offset(x: geo.size.width * (1 - pace.elapsed) - 1, y: -2)
                         }
                     }
                 }
@@ -597,7 +608,7 @@ private struct PoolBar: View, Themed {
         }
     }
 
-    /// Only speaks up when the outlook isn't plain.
+    /// Where the window lands at the current rate; silent while it's too young to say.
     private func outlook(_ pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String? {
         let spent = window.segments.filter { $0.map { $0.leftPercent.rounded() <= 0 } ?? false }.count
         if spent > 0 {
@@ -605,8 +616,7 @@ private struct PoolBar: View, Themed {
         }
         guard let pace else { return nil }
         if let runsOut = pace.runsOutAt { return "Runs out \(countdown(to: runsOut, now: now))" }
-        if verdict == .tight { return "~\(max(1, Int(pace.projectedLeft.rounded())))% left at reset" }
-        return nil
+        return "~\(max(1, Int(pace.projectedLeft.rounded())))% left at reset"
     }
 
     private func reset(now: Date) -> String? {
