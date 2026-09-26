@@ -36,8 +36,7 @@ const pick = (id: string) => {
 
 const initialAgents: DemoAgent[] = [
   { ...pick("claude"), sessions: 2, state: "working" },
-  { ...pick("codex"), sessions: 1, state: "working" },
-  { ...pick("gemini"), sessions: 1, state: "waiting" },
+  { ...pick("codex"), sessions: 1, state: "waiting" },
   { ...pick("opencode"), sessions: 0, state: "idle" },
 ];
 
