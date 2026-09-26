@@ -104,6 +104,7 @@ struct MenuView: View, Themed {
         })
         .animation(Motion.fade, value: model.lastError)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
+        .animation(Motion.fade, value: prefs.limitsExpanded)
     }
 
     private var divider: some View {
@@ -186,23 +187,31 @@ struct MenuView: View, Themed {
     // MARK: Limits
 
     /// Hidden until a login is found, so Macs without Claude Code or Codex never see it.
+    /// Collapsed, one badge per account shows its fullest window; the row expands to every bar.
     @ViewBuilder
     private var limits: some View {
         let accounts = model.usage.accounts
         if prefs.usageLimits, !accounts.isEmpty {
             let providers = Set(accounts.map(\.provider))
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    SectionTitle("Limits")
-                    Spacer()
-                    if let checkedAt = model.usage.checkedAt {
-                        Text(model.usage.refreshing ? "Checking…" : "As of \(checkedAt.formatted(date: .omitted, time: .shortened))")
-                            .font(.system(size: 12).monospacedDigit())
-                            .foregroundStyle(palette.tertiaryText)
+                DisclosureRow(expanded: $prefs.limitsExpanded, title: "Limits") {
+                    if prefs.limitsExpanded {
+                        if let checkedAt = model.usage.checkedAt {
+                            Text(model.usage.refreshing ? "Checking…" : "As of \(checkedAt.formatted(date: .omitted, time: .shortened))")
+                                .font(.system(size: 12).monospacedDigit())
+                                .foregroundStyle(palette.tertiaryText)
+                        }
+                    } else {
+                        HStack(spacing: 10) {
+                            ForEach(accounts) { LimitBadge(account: $0) }
+                        }
                     }
                 }
-                ForEach(accounts) { account in
-                    UsageAccountRow(account: account, showLocations: accounts.count > providers.count)
+                if prefs.limitsExpanded {
+                    ForEach(accounts) { account in
+                        UsageAccountRow(account: account, showLocations: accounts.count > providers.count)
+                    }
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, 16)
@@ -347,6 +356,73 @@ private struct AgentRow: View, Themed {
     }
 }
 
+/// A section title that toggles its section, with a chevron that turns and a trailing summary.
+private struct DisclosureRow<Trailing: View>: View, Themed {
+    @Binding var expanded: Bool
+    let title: String
+    @ViewBuilder let trailing: Trailing
+    @State private var hovering = false
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        Button { expanded.toggle() } label: {
+            HStack(spacing: 6) {
+                SectionTitle(title)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                Spacer()
+                trailing
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+    }
+}
+
+/// One account's fullest window, for the collapsed Limits row.
+private struct LimitBadge: View, Themed {
+    let account: UsageAccount
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        HStack(spacing: 5) {
+            AgentIcon(id: account.provider, size: 18)
+            if let worst = account.windows.max(by: { $0.usedPercent < $1.usedPercent }) {
+                Text("\(Int(worst.usedPercent.rounded()))%")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(UsageColor.of(worst.usedPercent))
+            } else {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.orange)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        let name = AgentKind.named(account.provider)?.displayName ?? account.provider
+        guard let worst = account.windows.max(by: { $0.usedPercent < $1.usedPercent }) else {
+            return "\(name): \(account.error ?? "unavailable")"
+        }
+        return "\(name): \(worst.label) \(Int(worst.usedPercent.rounded()))% used"
+    }
+}
+
+private enum UsageColor {
+    static func of(_ percent: Double) -> Color {
+        if percent >= 90 { return Palette.red }
+        if percent >= 75 { return Palette.orange }
+        return Palette.green
+    }
+}
+
 private struct UsageAccountRow: View, Themed {
     let account: UsageAccount
     /// Two logins of one provider show where each lives.
@@ -399,7 +475,7 @@ private struct UsageBar: View, Themed {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(palette.track)
-                        Capsule().fill(color).frame(width: geo.size.width * window.usedPercent / 100)
+                        Capsule().fill(UsageColor.of(window.usedPercent)).frame(width: geo.size.width * window.usedPercent / 100)
                     }
                 }
                 .frame(height: 5)
@@ -420,12 +496,6 @@ private struct UsageBar: View, Themed {
 
     private var percent: Int { Int(window.usedPercent.rounded()) }
 
-    private var color: Color {
-        if window.usedPercent >= 90 { return Palette.red }
-        if window.usedPercent >= 75 { return Palette.orange }
-        return Palette.green
-    }
-
     /// Soon as a countdown, otherwise the day and time.
     private func reset(now: Date) -> String {
         guard let at = window.resetsAt else { return "" }
@@ -439,25 +509,26 @@ private struct UsageBar: View, Themed {
 
 private struct AgentIcon: View, Themed {
     let id: String
+    var size: CGFloat = 22
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(palette.fill)
+            RoundedRectangle(cornerRadius: size * 6 / 22).fill(palette.fill)
             if let logo = Self.logo(for: id) {
                 Image(nsImage: logo)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 16, height: 16)
+                    .frame(width: size * 16 / 22, height: size * 16 / 22)
             } else {
                 Image(systemName: "terminal")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: size / 2, weight: .semibold))
             }
         }
         .foregroundStyle(.white.opacity(0.9))
-        .frame(width: 22, height: 22)
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.hairline, lineWidth: 0.5))
+        .frame(width: size, height: size)
+        .overlay(RoundedRectangle(cornerRadius: size * 6 / 22).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
 
