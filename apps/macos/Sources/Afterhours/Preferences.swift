@@ -17,6 +17,8 @@ final class Preferences {
     static let untilSessionsClose = -1
     var turnDisplayOff: Bool { didSet { save(turnDisplayOff, "turnDisplayOff") } }
     var notifications: Bool { didSet { save(notifications, "notifications") } }
+    /// Shows Claude Code and Codex subscription quotas in the menu.
+    var usageLimits: Bool { didSet { save(usageLimits, "usageLimits") } }
     /// A name from /System/Library/Sounds, or "" for none.
     var sound: String { didSet { save(sound, "sound") } }
     /// Stores opt-outs rather than opt-ins, so agents added later are detected by default.
@@ -38,6 +40,7 @@ final class Preferences {
             "batteryWaitMinutes": 60,
             "turnDisplayOff": false,
             "notifications": true,
+            "usageLimits": true,
             "sound": "Glass",
         ])
         enabled = defaults.bool(forKey: "enabled")
@@ -49,6 +52,7 @@ final class Preferences {
         batteryWaitMinutes = defaults.integer(forKey: "batteryWaitMinutes")
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
+        usageLimits = defaults.bool(forKey: "usageLimits")
         sound = defaults.string(forKey: "sound") ?? ""
         disabledAgents = Set(defaults.stringArray(forKey: "disabledAgents") ?? [])
     }

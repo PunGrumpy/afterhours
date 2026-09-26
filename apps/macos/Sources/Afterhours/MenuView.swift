@@ -80,6 +80,7 @@ struct MenuView: View, Themed {
             divider
             agents
             divider
+            limits
             pause
             divider
             VStack(spacing: 2) {
@@ -98,8 +99,11 @@ struct MenuView: View, Themed {
         .frame(width: 300)
         .foregroundStyle(.white)
         .background(Palette.background(reduceTransparency: reduceTransparency))
-        .background(DarkWindow())
+        .background(MenuWindow {
+            if prefs.usageLimits { model.usage.refresh(minimumAge: UsageMonitor.menuInterval) }
+        })
         .animation(Motion.fade, value: model.lastError)
+        .animation(Motion.fade, value: model.usage.accounts.isEmpty)
     }
 
     private var divider: some View {
@@ -177,6 +181,35 @@ struct MenuView: View, Themed {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: Limits
+
+    /// Hidden until a login is found, so Macs without Claude Code or Codex never see it.
+    @ViewBuilder
+    private var limits: some View {
+        let accounts = model.usage.accounts
+        if prefs.usageLimits, !accounts.isEmpty {
+            let providers = Set(accounts.map(\.provider))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    SectionTitle("Limits")
+                    Spacer()
+                    if let checkedAt = model.usage.checkedAt {
+                        Text(model.usage.refreshing ? "Checking…" : "As of \(checkedAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 12).monospacedDigit())
+                            .foregroundStyle(palette.tertiaryText)
+                    }
+                }
+                ForEach(accounts) { account in
+                    UsageAccountRow(account: account, showLocations: accounts.count > providers.count)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .transition(.opacity)
+            divider
+        }
     }
 
     // MARK: Pause
@@ -314,6 +347,96 @@ private struct AgentRow: View, Themed {
     }
 }
 
+private struct UsageAccountRow: View, Themed {
+    let account: UsageAccount
+    /// Two logins of one provider show where each lives.
+    let showLocations: Bool
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                AgentIcon(id: account.provider)
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if showLocations {
+                    Text(account.locations.joined(separator: " "))
+                        .font(.system(size: 11).monospaced())
+                        .foregroundStyle(palette.tertiaryText)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+            }
+            if let error = account.error {
+                Text(error)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(account.windows) { UsageBar(window: $0) }
+        }
+    }
+
+    private var title: String {
+        let name = AgentKind.named(account.provider)?.displayName ?? account.provider
+        return account.plan.map { "\(name) · \($0)" } ?? name
+    }
+}
+
+private struct UsageBar: View, Themed {
+    let window: UsageWindow
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            HStack(spacing: 8) {
+                Text(window.label)
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(1)
+                    .frame(width: 72, alignment: .leading)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(palette.track)
+                        Capsule().fill(color).frame(width: geo.size.width * window.usedPercent / 100)
+                    }
+                }
+                .frame(height: 5)
+                Text("\(percent)%")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .frame(width: 36, alignment: .trailing)
+                Text(reset(now: context.date))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(palette.tertiaryText)
+                    .lineLimit(1)
+                    .frame(width: 66, alignment: .trailing)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(window.label), \(percent)% used, \(reset(now: context.date))")
+        }
+        .animation(Motion.fade, value: window.usedPercent)
+    }
+
+    private var percent: Int { Int(window.usedPercent.rounded()) }
+
+    private var color: Color {
+        if window.usedPercent >= 90 { return Palette.red }
+        if window.usedPercent >= 75 { return Palette.orange }
+        return Palette.green
+    }
+
+    /// Soon as a countdown, otherwise the day and time.
+    private func reset(now: Date) -> String {
+        guard let at = window.resetsAt else { return "" }
+        let minutes = Int(at.timeIntervalSince(now) / 60)
+        if minutes <= 0 { return "resets now" }
+        if minutes < 60 { return "in \(minutes)m" }
+        if minutes < 24 * 60 { return "in \(minutes / 60)h \(String(format: "%02d", minutes % 60))m" }
+        return at.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}
+
 private struct AgentIcon: View, Themed {
     let id: String
     @Environment(\.colorSchemeContrast) var contrast
@@ -448,15 +571,41 @@ private struct PillSwitchBody: View, Themed {
     }
 }
 
-/// The menu is designed dark only, so force the popover window's appearance.
-private struct DarkWindow: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { view.window?.appearance = NSAppearance(named: .darkAqua) }
+/// The menu is designed dark only, so force the popover window's appearance. Also reports each time
+/// the window comes on screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra.
+private struct MenuWindow: NSViewRepresentable {
+    let onShow: () -> Void
+
+    func makeNSView(context: Context) -> WatchingView {
+        let view = WatchingView()
+        view.onShow = onShow
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: WatchingView, context: Context) {
+        nsView.onShow = onShow
+    }
+
+    final class WatchingView: NSView {
+        var onShow: () -> Void = {}
+        private var observer: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            guard let window else { return }
+            window.appearance = NSAppearance(named: .darkAqua)
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
+                    self.onShow()
+                }
+            }
+            if window.occlusionState.contains(.visible) { onShow() }
+        }
+    }
 }
 
 // MARK: - Transitions

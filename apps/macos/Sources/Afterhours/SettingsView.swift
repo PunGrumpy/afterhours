@@ -145,6 +145,16 @@ private struct AgentsTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                Toggle("Show subscription limits in the menu", isOn: $prefs.usageLimits)
+            } header: {
+                Text("Limits")
+            } footer: {
+                Text("Reads the Claude Code login from your Keychain with the `security` tool and the Codex login from `~/.codex/auth.json`, then asks Anthropic and OpenAI how much of each window is used. It checks when you open the menu and every 5 minutes while agents work. Afterhours never stores or refreshes a login.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

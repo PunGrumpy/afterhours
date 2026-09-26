@@ -36,6 +36,7 @@ enum HoldState: Equatable {
 @Observable
 final class AppModel {
     let prefs = Preferences()
+    let usage = UsageMonitor()
 
     private(set) var sessions: [AgentSession] = []
     private(set) var state: HoldState = .idle
@@ -147,6 +148,12 @@ final class AppModel {
         }
         apply(next)
         warnIfBatteryLow(next)
+        // The quota matters while agents burn it; otherwise opening the menu refreshes on demand.
+        if !prefs.usageLimits {
+            usage.clear()
+        } else if next.isHolding {
+            usage.refresh()
+        }
     }
 
     /// Warns once per hold, 5 points before the battery cutoff.
