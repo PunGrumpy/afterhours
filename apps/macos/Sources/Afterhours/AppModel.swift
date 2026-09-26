@@ -60,6 +60,7 @@ final class AppModel {
     @ObservationIgnored private var sleepDisabledByUs = false
     @ObservationIgnored private var warnedLowBattery = false
     @ObservationIgnored private var hotKey: HotKey?
+    @ObservationIgnored private var terminationSignals: [DispatchSourceSignal] = []
 
     init() {
         prefs = Preferences()
@@ -73,6 +74,17 @@ final class AppModel {
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.releaseAll() }
+        }
+        // `kill`, `pkill`, and updaters skip willTerminate; without this, `disablesleep 1` outlives the app.
+        for signalNumber in [SIGTERM, SIGINT] {
+            signal(signalNumber, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler { [weak self] in
+                MainActor.assumeIsolated { self?.releaseAll() }
+                exit(0)
+            }
+            source.resume()
+            terminationSignals.append(source)
         }
         if prefs.notifications, Self.canNotify {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
