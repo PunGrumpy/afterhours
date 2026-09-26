@@ -61,7 +61,7 @@ Change both in **Settings… > Power**.
 
 ## Subscription limits
 
-The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: green with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
+The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
 
 - **Claude Code**: the Keychain login, one per `~/.claude*` config directory
 - **Codex**: `~/.codex/auth.json`
