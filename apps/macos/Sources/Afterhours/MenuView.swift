@@ -582,26 +582,35 @@ private struct PoolBar: View, Themed {
         .animation(Motion.settle, value: window.usedPercent)
     }
 
-    /// One account's share of the bar: what's left, with a mark where even pacing would put it.
+    /// One account's share of the bar: what's left. Any share above zero shows at least a full dot,
+    /// and only a bar that's heading for trouble gets the even-pace mark, so a calm row stays calm.
     private struct Segment: View, Themed {
         let window: UsageWindow?
         let now: Date
         @Environment(\.colorSchemeContrast) var contrast
 
+        private static let tickWidth: CGFloat = 2
+        private static let tickOverhang: CGFloat = 4
+
         var body: some View {
             GeometryReader { geo in
+                let verdict = window.map { UsageColor.verdict($0, now: now) }
                 ZStack(alignment: .leading) {
                     Capsule().fill(palette.track).opacity(window == nil ? 0.5 : 1)
-                    if let window {
+                    if let window, let verdict, window.leftPercent > 0 {
                         Capsule()
-                            .fill(UsageColor.verdict(window, now: now).color)
-                            .frame(width: geo.size.width * window.leftPercent / 100)
-                        if let pace = window.pace(now: now) {
-                            Capsule()
-                                .fill(.white.opacity(0.85))
-                                .frame(width: 2, height: geo.size.height + 4)
-                                .offset(x: geo.size.width * (1 - pace.elapsed) - 1, y: -2)
-                        }
+                            .fill(verdict.color)
+                            .frame(width: max(geo.size.height, geo.size.width * window.leftPercent / 100))
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    if let window, let verdict, verdict != .fine, window.leftPercent > 0,
+                       let pace = window.pace(now: now) {
+                        let centered = geo.size.width * (1 - pace.elapsed) - Self.tickWidth / 2
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(.white.opacity(0.55))
+                            .frame(width: Self.tickWidth, height: geo.size.height + Self.tickOverhang)
+                            .offset(x: min(max(centered, 0), geo.size.width - Self.tickWidth))
                     }
                 }
             }
