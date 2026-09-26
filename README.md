@@ -38,13 +38,13 @@ Open **Settings… > Agents** and click **Install** for each Claude Code config 
 
 Hooks tell Afterhours when Claude Code is working, waiting for you, or idle. Agents without hooks count as working while their processes use at least 3% of a CPU core, and for 45 seconds after that.
 
-Any tool with hooks or plugins can report its own state:
+Any tool with hooks or plugins can report its own state. Afterhours installs the hook binary at `~/Library/Application Support/Afterhours/bin/afterhours-hook`, not on your PATH, so call it by its full path:
 
 ```bash
-afterhours-hook agent_id --state working --session session_id
+"$HOME/Library/Application Support/Afterhours/bin/afterhours-hook" agent_id --state working --session session_id
 ```
 
-`--state` accepts `working`, `waiting`, `idle`, or `end`.
+`agent_id` is any of the ids Afterhours knows: `claude`, `codex`, `opencode`, `antigravity`, `gemini`, `copilot`, `cursor`, `aider`, `amp`, `droid`, `goose`, `kiro`, `kilo`, `openclaw`, `hermes`, `cline`, or any name you like. `--state` accepts `working`, `waiting`, `idle`, or `end`.
 
 ### 4. Launch at login
 
@@ -61,7 +61,7 @@ Change both in **Settings… > Power**.
 
 ## Subscription limits
 
-The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: green with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
+The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
 
 - **Claude Code**: the Keychain login, one per `~/.claude*` config directory
 - **Codex**: `~/.codex/auth.json`
@@ -98,7 +98,21 @@ Claude Code doesn't fire a `Stop` hook when you interrupt it with Esc, so a sess
 
 ## Privacy
 
-Afterhours runs on your Mac and makes no network requests. It reads process names and command lines to spot agents, and never reads your code or terminal output.
+Afterhours has no telemetry, analytics, crash reporting, or update checks. It reads process names and command lines to spot agents, and never reads your code or terminal output.
+
+The only network requests are the subscription checks described above. They run only while **Settings… > Limits > Show subscription limits in the menu** is on, which is the default. Each request sends a login your tool already stores on your Mac to that tool's own vendor. It reads, never writes, and runs when you open the menu and every 5 minutes while agents work:
+
+| Provider | Login it reads | Where it's sent |
+| --- | --- | --- |
+| Claude Code | Keychain login, one per `~/.claude*` directory | `api.anthropic.com` |
+| Codex | `~/.codex/auth.json` | `chatgpt.com` |
+| OpenCode Go | OpenCode's `auth.json` | `opencode.ai` |
+| Copilot | `~/.config/github-copilot/apps.json` or the `gh` login | `api.github.com`, presented as Copilot Chat |
+| Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh` |
+| Grok Build | `~/.grok/auth.json` | `cli-chat-proxy.grok.com` |
+| CLIProxyAPI hubs you add | the management key you enter | the hub's URL |
+
+Afterhours never stores, refreshes, or forwards a login anywhere else. Turn the setting off, and no request goes out at all.
 
 The hook receives each event Claude Code sends and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
 
@@ -114,8 +128,10 @@ Afterhours deletes a session's file when its agent exits.
 Remove the system changes before deleting the app:
 
 1. Click **Settings… > Power > Uninstall** to remove the sudoers rule.
-2. Click **Settings… > Agents > Remove** for each config directory.
-3. Delete the app and `~/Library/Application Support/Afterhours`.
+2. Click **Settings… > Agents > Remove** for each config directory. This leaves a copy of your previous file as `settings.json.afterhours-backup` next to each `settings.json`. Delete it once you're happy with the result.
+3. Click **Settings… > Limits > Remove** next to each hub. This deletes its management key from your Keychain.
+4. Turn off **Settings… > General > Launch at login**.
+5. Delete the app, `~/Library/Application Support/Afterhours`, and its preferences: `defaults delete app.afterhours.local`.
 
 Agent logos in `apps/macos/Resources/agents/` come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and each vendor's own site. They're trademarks of their owners.
 

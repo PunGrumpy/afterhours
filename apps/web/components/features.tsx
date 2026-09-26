@@ -160,24 +160,26 @@ export const Features = () => (
     </Card>
 
     <Card
-      title="Private. No network."
+      title="No telemetry"
       visual={
         <div className="bg-menu w-full max-w-[220px] rounded-[10px] p-3 text-white">
           <div className="flex items-center justify-between text-[12px]">
             <span className="font-medium">Afterhours</span>
             <span className="text-white/45">Network</span>
           </div>
-          <div className="border-b-mac-green/70 mt-3 h-5 border-t border-b-[1.5px] border-dashed [border-bottom-style:solid] border-t-white/10" />
-          <dl className="mt-2.5 grid grid-cols-[1fr_auto] gap-y-1 text-[12px] tabular-nums">
-            <dt className="text-white/55">Sent</dt>
-            <dd className="text-right">0 B</dd>
-            <dt className="text-white/55">Received</dt>
-            <dd className="text-right">0 B</dd>
+          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-y-1 text-[12px] tabular-nums">
+            <dt className="text-white/55">Analytics</dt>
+            <dd className="text-right">None</dd>
+            <dt className="text-white/55">Your code</dt>
+            <dd className="text-right">Never read</dd>
+            <dt className="text-white/55">Limit checks</dt>
+            <dd className="text-mac-green text-right">Optional</dd>
           </dl>
         </div>
       }
     >
-      It reads process names to spot agents, never your code or terminal.
+      It only talks to your providers to show your limits, and you can turn that
+      off.
     </Card>
   </div>
 );
