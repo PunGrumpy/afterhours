@@ -93,9 +93,13 @@ struct ActivityTracker {
     private var lastScan: Date?
     private var cpuByPid: [Int32: UInt64] = [:]
     private var lastActive: [Int32: Date] = [:]
+    /// A sample shorter than this can't tell a redraw from real work.
+    private let minimumInterval: TimeInterval = 1
+    private var lastResults: [Detected] = []
 
     mutating func scan(enabled: Set<String>) -> [Detected] {
         let now = Date()
+        if let lastScan, now.timeIntervalSince(lastScan) < minimumInterval { return lastResults }
         let pids = Proc.allPids()
         var children: [Int32: [Int32]] = [:]
         var names: [Int32: String] = [:]
@@ -137,6 +141,7 @@ struct ActivityTracker {
         cpuByPid = nextCPU
         let live = Set(roots.map(\.0))
         lastActive = lastActive.filter { live.contains($0.key) }
+        lastResults = results
         return results
     }
 
