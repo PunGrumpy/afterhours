@@ -24,12 +24,15 @@ nonisolated enum Power {
             return BatteryStatus(percent: current * 100 / max, onAC: onAC,
                                  charging: desc[kIOPSIsChargingKey] as? Bool ?? false)
         }
-        return BatteryStatus(percent: nil, onAC: true, charging: false)
+        return BatteryStatus(percent: nil, onAC: onAC, charging: false)
     }
 
     static var lowPowerMode: Bool { ProcessInfo.processInfo.isLowPowerModeEnabled }
 
     static var lidClosed: Bool { rootDomainProperty("AppleClamshellState") as? Bool ?? false }
+
+    /// False in clamshell mode, when an external display makes a closed lid a normal desk setup.
+    static var lidClosedWouldSleep: Bool { rootDomainProperty("AppleClamshellCausesSleep") as? Bool ?? true }
 
     /// Reflects `pmset disablesleep`.
     static var sleepDisabled: Bool { rootDomainProperty("SleepDisabled") as? Bool ?? false }
