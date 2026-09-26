@@ -208,7 +208,7 @@ struct MenuView: View, Themed {
     private var limits: some View {
         let pools = ProviderPool.build(model.usage.accounts)
         if prefs.usageLimits, !pools.isEmpty || !model.usage.snapshot.hubErrors.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 DisclosureRow(expanded: $prefs.limitsExpanded, title: "Limits") {
                     if prefs.limitsExpanded {
                         if let checkedAt = model.usage.checkedAt {
@@ -222,8 +222,7 @@ struct MenuView: View, Themed {
                         }
                     }
                 }
-                if prefs.limitsExpanded {
-                    // Emerges from under the title it belongs to, and goes back the same way.
+                Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(pools) { PoolRows(pool: $0) }
                         ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
@@ -233,8 +232,7 @@ struct MenuView: View, Themed {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    .clipped()
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                    .padding(.top, 10)
                 }
             }
             .padding(.horizontal, 16)
@@ -379,6 +377,36 @@ private struct AgentRow: View, Themed {
     }
 }
 
+/// Grows from nothing to its content's height and back. The content hangs from the bottom edge, so
+/// it slides out from under the row above and returns the same way; with Reduce Motion it is
+/// revealed in place instead. The window it lives in stays stationary, so nothing overlaps.
+private struct Collapsible<Content: View>: View {
+    let expanded: Bool
+    let reduceMotion: Bool
+    @ViewBuilder let content: Content
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: expanded ? height : 0, alignment: reduceMotion ? .top : .bottom)
+            .clipped()
+            .opacity(expanded ? 1 : 0)
+            .accessibilityHidden(!expanded)
+    }
+}
+
+/// Dims on press-down at once and recovers on release, without moving the text it holds.
+private struct PressDim: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.55 : 1)
+            .animation(configuration.isPressed ? nil : Motion.press, value: configuration.isPressed)
+    }
+}
+
 /// A section title that toggles its section, with a chevron that turns and a trailing summary.
 private struct DisclosureRow<Trailing: View>: View, Themed {
     @Binding var expanded: Bool
@@ -402,7 +430,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressScale())
+        .buttonStyle(PressDim())
         .onHover { hovering = $0 }
         .accessibilityAddTraits(.isButton)
         .accessibilityValue(expanded ? "Expanded" : "Collapsed")
