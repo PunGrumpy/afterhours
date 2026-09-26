@@ -29,3 +29,18 @@ import Testing
     #expect(AgentState(rawValue: "working") == .working)
     #expect(AgentState(rawValue: "end") == nil)
 }
+
+@Test func claudeEventsMapToStatesAndUnknownEventsToNothing() {
+    #expect(HookAction(claudeEvent: "PreToolUse") == .set(.working))
+    #expect(HookAction(claudeEvent: "Notification") == .set(.waiting))
+    #expect(HookAction(claudeEvent: "Stop") == .set(.idle))
+    #expect(HookAction(claudeEvent: "SessionEnd") == .end)
+    #expect(HookAction(claudeEvent: "SubagentStop") == nil)
+}
+
+@Test func explicitStatesAcceptOnlyTheDocumentedValues() {
+    #expect(HookAction(explicitState: "working") == .set(.working))
+    #expect(HookAction(explicitState: "end") == .end)
+    #expect(HookAction(explicitState: "done") == nil)
+    #expect(HookAction(explicitState: "Working") == nil)
+}

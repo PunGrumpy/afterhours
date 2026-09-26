@@ -195,7 +195,7 @@ private struct AgentsTab: View {
                 .id(refresh)
             } footer: {
                 if let error { Text(error).foregroundStyle(.red) }
-                Text("Hooks tell Afterhours when Claude Code is working, waiting for you, or idle. Restart open Claude Code sessions after installing. Your original file is kept as `settings.json.afterhours-backup`.")
+                Text("Hooks tell Afterhours when Claude Code is working, waiting for you, or idle. Restart open Claude Code sessions after installing. A copy of the previous file is kept as `settings.json.afterhours-backup`.")
             }
 
             SettingsSection("Process detection") {
