@@ -98,7 +98,21 @@ Claude Code doesn't fire a `Stop` hook when you interrupt it with Esc, so a sess
 
 ## Privacy
 
-Afterhours runs on your Mac and makes no network requests. It reads process names and command lines to spot agents, and never reads your code or terminal output.
+Afterhours has no telemetry, analytics, crash reporting, or update checks. It reads process names and command lines to spot agents, and never reads your code or terminal output.
+
+The only network requests are the subscription checks described above. They run only while **Settings… > Limits > Show subscription limits in the menu** is on, which is the default. Each request sends a login your tool already stores on your Mac to that tool's own vendor. It reads, never writes, and runs when you open the menu and every 5 minutes while agents work:
+
+| Provider | Login it reads | Where it's sent |
+| --- | --- | --- |
+| Claude Code | Keychain login, one per `~/.claude*` directory | `api.anthropic.com` |
+| Codex | `~/.codex/auth.json` | `chatgpt.com` |
+| OpenCode Go | OpenCode's `auth.json` | `opencode.ai` |
+| Copilot | `~/.config/github-copilot/apps.json` or the `gh` login | `api.github.com`, presented as Copilot Chat |
+| Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh` |
+| Grok Build | `~/.grok/auth.json` | `cli-chat-proxy.grok.com` |
+| CLIProxyAPI hubs you add | the management key you enter | the hub's URL |
+
+Afterhours never stores, refreshes, or forwards a login anywhere else. Turn the setting off, and no request goes out at all.
 
 The hook receives each event Claude Code sends and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
 
