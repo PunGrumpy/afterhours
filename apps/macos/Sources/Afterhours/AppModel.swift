@@ -65,7 +65,9 @@ final class AppModel {
         prefs = Preferences()
         // Recover from a previous crash that left lid sleep disabled.
         if Power.sleepDisabled, LidControl.isInstalled { LidControl.setSleepDisabled(false) }
-        try? ClaudeHooks.installHookBinary()
+        do { try ClaudeHooks.installHookBinary() } catch {
+            lastError = "Couldn't install afterhours-hook: \(error.localizedDescription)"
+        }
 
         prefs.onChange = { [weak self] in self?.tick() }
         hotKey = HotKey.toggle { [weak self] in self?.toggleEnabled() }
