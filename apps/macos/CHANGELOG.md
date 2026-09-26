@@ -1,5 +1,12 @@
 # @afterhours/macos
 
+## 0.2.0
+
+### Minor Changes
+
+- 8607727: Show subscription limits in the menu for Claude Code, Codex, Cursor, Copilot, OpenCode Go, and Grok Build. Each window is a bar of what's left, colored by where the current burn rate lands, with its reset countdown, read with the logins the tools already keep. Accounts pooled on a CLIProxyAPI hub join too, once you add the hub under **Settings… > Limits > Usage providers**. Turn it all off in **Settings… > Limits**.
+- 8607727: Settings now has General, Power, Agents, and Limits tabs, and the window fits the tab you're on instead of scrolling. Process detection is a two-column list of checkboxes, and the display option moved to General.
+
 ## 0.1.0
 
 The first release of Afterhours, a menu bar app that keeps your Mac awake while coding agents work.
