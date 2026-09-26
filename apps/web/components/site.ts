@@ -5,6 +5,7 @@ export const site = {
     name: "Noppakorn Kaewsalabnil",
     url: "https://www.pungrumpy.com",
   },
+  brew: "brew install --cask pungrumpy/tap/afterhours",
   download: "https://github.com/PunGrumpy/afterhours/releases/latest",
   repo: "https://github.com/PunGrumpy/afterhours",
   version: app.version,
