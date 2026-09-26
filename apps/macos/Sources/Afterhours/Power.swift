@@ -24,7 +24,7 @@ nonisolated enum Power {
             return BatteryStatus(percent: current * 100 / max, onAC: onAC,
                                  charging: desc[kIOPSIsChargingKey] as? Bool ?? false)
         }
-        return BatteryStatus(percent: nil, onAC: true, charging: false)
+        return BatteryStatus(percent: nil, onAC: onAC, charging: false)
     }
 
     static var lowPowerMode: Bool { ProcessInfo.processInfo.isLowPowerModeEnabled }
