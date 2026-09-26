@@ -20,25 +20,11 @@ let payload: [String: Any] = {
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 }()
 
-enum Action {
-    case set(AgentState)
-    case end
-}
-
-func action(forEvent event: String) -> Action? {
-    switch event {
-    case "SessionStart", "Stop": return .set(.idle)
-    case "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact": return .set(.working)
-    case "Notification", "PermissionRequest": return .set(.waiting)
-    case "SessionEnd": return .end
-    default: return nil
-    }
-}
-
-let resolved: Action
+let resolved: HookAction
 if let explicit = option("--state") {
-    resolved = explicit == "end" ? .end : .set(AgentState(rawValue: explicit) ?? .working)
-} else if let event = payload["hook_event_name"] as? String, let mapped = action(forEvent: event) {
+    guard let action = HookAction(explicitState: explicit) else { exit(0) }
+    resolved = action
+} else if let event = payload["hook_event_name"] as? String, let mapped = HookAction(claudeEvent: event) {
     resolved = mapped
 } else {
     exit(0)
