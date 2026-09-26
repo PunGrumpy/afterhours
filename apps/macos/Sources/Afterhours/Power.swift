@@ -101,10 +101,18 @@ enum LidControl {
 
     static func install() throws {
         let user = NSUserName()
-        let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1\n"
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("afterhours.sudoers")
-        try rule.write(to: tmp, atomically: true, encoding: .utf8)
-        let shell = "/usr/sbin/visudo -cf '\(tmp.path)' && /usr/bin/install -m 0440 -o root -g wheel '\(tmp.path)' \(sudoersPath)"
+        guard !user.isEmpty, user.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) }) else {
+            throw NSError(domain: "Afterhours", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Can't install lid-closed mode for the account name \"\(user)\"",
+            ])
+        }
+        let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1"
+        // Root writes and validates the rule in its own temp file, so nothing running as the user can swap it before install.
+        let shell = """
+        set -e; t="$(/usr/bin/mktemp /tmp/afterhours.sudoers.XXXXXX)"; trap '/bin/rm -f "$t"' EXIT; \
+        /bin/echo '\(rule)' > "$t"; /usr/sbin/visudo -cf "$t"; \
+        /usr/bin/install -m 0440 -o root -g wheel "$t" \(sudoersPath)
+        """
         try runAsAdmin(shell)
     }
 
