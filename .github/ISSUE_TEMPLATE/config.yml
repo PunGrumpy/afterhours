@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup guide
+    url: https://github.com/PunGrumpy/afterhours#install
+    about: Installing, lid-closed mode, and connecting your agents are covered in the README.
