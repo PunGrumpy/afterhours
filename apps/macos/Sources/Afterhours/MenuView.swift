@@ -18,6 +18,7 @@ private struct Palette {
     var fill: Color { .white.opacity(increased ? 0.22 : 0.1) }
     var hoverFill: Color { .white.opacity(increased ? 0.32 : 0.18) }
     var track: Color { .white.opacity(increased ? 0.3 : 0.15) }
+    var card: Color { .white.opacity(increased ? 0.14 : 0.06) }
     var idleRow: Double { increased ? 0.7 : 0.45 }
 
     static func background(reduceTransparency: Bool) -> Color {
@@ -39,15 +40,20 @@ private enum Motion {
     static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
     /// A spring, so a switch flipped again mid-flight reverses smoothly.
     static let knob = Animation.spring(duration: 0.25, bounce: 0)
+    /// Critically damped: nothing here carries momentum, so nothing overshoots. Reversible mid-flight.
+    static let settle = Animation.spring(duration: 0.35, bounce: 0)
 }
 
 struct MenuView: View, Themed {
     let model: AppModel
     @Bindable var prefs: Preferences
+    /// Rendering to an image: no window to watch, and the window's own chrome is drawn here instead.
+    var snapshot = false
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorSchemeContrast) var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,6 +86,7 @@ struct MenuView: View, Themed {
             divider
             agents
             divider
+            limits
             pause
             divider
             VStack(spacing: 2) {
@@ -97,9 +104,23 @@ struct MenuView: View, Themed {
         }
         .frame(width: 300)
         .foregroundStyle(.white)
-        .background(Palette.background(reduceTransparency: reduceTransparency))
-        .background(DarkWindow())
+        .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
+        .background {
+            if !snapshot {
+                MenuWindow { if prefs.usageLimits { model.refreshUsage(minimumAge: UsageMonitor.menuInterval) } }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))
+        .overlay {
+            if snapshot {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(palette.hairline, lineWidth: 1)
+            }
+        }
+        .padding(snapshot ? 24 : 0)
+        .background(snapshot ? Color(red: 0.16, green: 0.18, blue: 0.24) : .clear)
         .animation(Motion.fade, value: model.lastError)
+        .animation(Motion.fade, value: model.usage.accounts.isEmpty)
+        .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
     }
 
     private var divider: some View {
@@ -177,6 +198,49 @@ struct MenuView: View, Themed {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: Limits
+
+    /// Hidden until a login is found, so Macs without Claude Code or Codex never see it. Accounts
+    /// pool per provider like T3 Code: collapsed, one badge per provider shows its fullest window;
+    /// expanded, each window is one bar with a segment per account.
+    @ViewBuilder
+    private var limits: some View {
+        let pools = ProviderPool.build(model.usage.accounts)
+        if prefs.usageLimits, !pools.isEmpty || !model.usage.snapshot.hubErrors.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                DisclosureRow(expanded: $prefs.limitsExpanded, title: "Limits") {
+                    if prefs.limitsExpanded {
+                        if let checkedAt = model.usage.checkedAt {
+                            Text(model.usage.refreshing ? "Checking…" : "As of \(checkedAt.formatted(date: .omitted, time: .shortened))")
+                                .font(.system(size: 12).monospacedDigit())
+                                .foregroundStyle(palette.tertiaryText)
+                        }
+                    } else {
+                        HStack(spacing: 10) {
+                            ForEach(pools) { PoolBadge(pool: $0) }
+                        }
+                    }
+                }
+                Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(pools) { PoolRows(pool: $0) }
+                        ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .transition(.opacity)
+            divider
+        }
     }
 
     // MARK: Pause
@@ -314,27 +378,296 @@ private struct AgentRow: View, Themed {
     }
 }
 
+/// Grows from nothing to its content's height and back. The content hangs from the bottom edge, so
+/// it slides out from under the row above and returns the same way; with Reduce Motion it is
+/// revealed in place instead. The window it lives in stays stationary, so nothing overlaps.
+private struct Collapsible<Content: View>: View {
+    let expanded: Bool
+    let reduceMotion: Bool
+    @ViewBuilder let content: Content
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: expanded ? height : 0, alignment: reduceMotion ? .top : .bottom)
+            .clipped()
+            .opacity(expanded ? 1 : 0)
+            .accessibilityHidden(!expanded)
+    }
+}
+
+/// Dims on press-down at once and recovers on release, without moving the text it holds.
+private struct PressDim: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.55 : 1)
+            .animation(configuration.isPressed ? nil : Motion.press, value: configuration.isPressed)
+    }
+}
+
+/// A section title that toggles its section, with a chevron that turns and a trailing summary.
+private struct DisclosureRow<Trailing: View>: View, Themed {
+    @Binding var expanded: Bool
+    let title: String
+    @ViewBuilder let trailing: Trailing
+    @State private var hovering = false
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        Button { expanded.toggle() } label: {
+            // Symbols at the title's font size sit on its baseline by design; the scale only shrinks the glyph.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                SectionTitle(title)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .imageScale(.small)
+                    .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                Spacer()
+                trailing
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressDim())
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+    }
+}
+
+/// One provider's emptiest pooled window, for the collapsed Limits row.
+private struct PoolBadge: View, Themed {
+    let pool: ProviderPool
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        HStack(spacing: 5) {
+            AgentIcon(id: pool.provider, size: 18)
+            if let worst = pool.fullest {
+                Text("\(worst.leftPercent)%")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(UsageColor.verdict(worst, now: Date()).color)
+            } else {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.orange)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
+        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
+    }
+}
+
+/// Bars show what's left, like the battery above them. Their color is a verdict on the whole window:
+/// green while the burn rate lands with room to spare, orange when it lands inside the last tenth,
+/// red when it runs out before the reset. Windows too young to project color by level instead.
+private enum UsageColor {
+    enum Verdict: Int, Comparable {
+        case fine, tight, out
+
+        static func < (lhs: Verdict, rhs: Verdict) -> Bool { lhs.rawValue < rhs.rawValue }
+
+        /// Blue like the system's own usage meters, so quota never reads as battery.
+        var color: Color {
+            switch self {
+            case .fine: Palette.blue
+            case .tight: Palette.orange
+            case .out: Palette.red
+            }
+        }
+    }
+
+    static func verdict(_ window: UsageWindow, now: Date) -> Verdict {
+        if window.leftPercent.rounded() <= 0 { return .out }
+        if let pace = window.pace(now: now) {
+            return pace.projectedLeft <= 0 ? .out : pace.projectedLeft < 10 ? .tight : .fine
+        }
+        return window.leftPercent < 10 ? .out : window.leftPercent < 25 ? .tight : .fine
+    }
+
+    /// The worst account decides the pool's color.
+    static func verdict(_ window: ProviderPool.Window, now: Date) -> Verdict {
+        window.segments.compactMap { $0.map { verdict($0, now: now) } }.max() ?? .fine
+    }
+}
+
+/// A provider's header, its failures, and one segmented bar per window.
+private struct PoolRows: View, Themed {
+    let pool: ProviderPool
+    @Environment(\.colorSchemeContrast) var contrast
+
+    /// The provider names the card; the meters live inside it.
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                AgentIcon(id: pool.provider)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+                    .padding(.trailing, 4)
+                Text(pool.name).font(.system(size: 13, weight: .semibold))
+                if let plan = pool.plan {
+                    Text(plan).font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
+                }
+                Spacer(minLength: 8)
+                Text(pool.accounts.count == 1 ? pool.accounts[0].locations[0] : "\(pool.accounts.count) accounts")
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(palette.tertiaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(pool.windows) { PoolBar(window: $0) }
+                ForEach(pool.errors, id: \.self) { error in
+                    Text(error)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.card))
+        }
+    }
+}
+
+private struct PoolBar: View, Themed {
+    let window: ProviderPool.Window
+    @Environment(\.colorSchemeContrast) var contrast
+
+    /// Name and outlook above, the bar, then what's left and the reset below, like the battery.
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let now = context.date
+            let verdict = UsageColor.verdict(window, now: now)
+            let pace = window.pace(now: now)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(window.label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let note = outlook(pace, verdict: verdict, now: now) {
+                        Text(note)
+                            .font(.system(size: 12).monospacedDigit())
+                            .foregroundStyle(verdict == .fine ? palette.tertiaryText : verdict.color)
+                            .lineLimit(1)
+                    }
+                }
+                HStack(spacing: window.segments.count > 1 ? 3 : 0) {
+                    ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
+                        Segment(window: segment, now: now)
+                    }
+                }
+                .frame(height: 6)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(window.leftPercent)% left").font(.system(size: 13).monospacedDigit())
+                    Spacer(minLength: 8)
+                    if let reset = reset(now: now) {
+                        Text(reset).font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.tertiaryText)
+                    }
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel(pace: pace, verdict: verdict, now: now))
+        }
+        .animation(Motion.settle, value: window.usedPercent)
+    }
+
+    /// One account's share of the bar: what's left. Any share above zero shows at least a full dot,
+    /// and only a bar that's heading for trouble gets the even-pace mark, so a calm row stays calm.
+    private struct Segment: View, Themed {
+        let window: UsageWindow?
+        let now: Date
+        @Environment(\.colorSchemeContrast) var contrast
+
+        private static let tickWidth: CGFloat = 2
+        private static let tickOverhang: CGFloat = 4
+
+        var body: some View {
+            GeometryReader { geo in
+                let verdict = window.map { UsageColor.verdict($0, now: now) }
+                ZStack(alignment: .leading) {
+                    Capsule().fill(palette.track).opacity(window == nil ? 0.5 : 1)
+                    if let window, let verdict, window.leftPercent > 0 {
+                        Capsule()
+                            .fill(verdict.color)
+                            .frame(width: max(geo.size.height, geo.size.width * window.leftPercent / 100))
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    if let window, let verdict, verdict != .fine, window.leftPercent > 0,
+                       let pace = window.pace(now: now) {
+                        let centered = geo.size.width * (1 - pace.elapsed) - Self.tickWidth / 2
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(.white.opacity(0.55))
+                            .frame(width: Self.tickWidth, height: geo.size.height + Self.tickOverhang)
+                            .offset(x: min(max(centered, 0), geo.size.width - Self.tickWidth))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Where the window lands at the current rate; silent while it's too young to say.
+    private func outlook(_ pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String? {
+        let spent = window.segments.filter { $0.map { $0.leftPercent.rounded() <= 0 } ?? false }.count
+        if spent > 0 {
+            return window.segments.count > 1 ? "\(spent) of \(window.segments.count) at limit" : "Limit reached"
+        }
+        guard let pace else { return nil }
+        if let runsOut = pace.runsOutAt { return "Runs out \(countdown(to: runsOut, now: now))" }
+        return "~\(max(1, Int(pace.projectedLeft.rounded())))% left at reset"
+    }
+
+    private func reset(now: Date) -> String? {
+        window.resetsAt.map { "Resets \(countdown(to: $0, now: now))" }
+    }
+
+    private func countdown(to date: Date, now: Date) -> String {
+        let minutes = Int(date.timeIntervalSince(now) / 60)
+        if minutes <= 0 { return "now" }
+        if minutes < 60 { return "in \(minutes)m" }
+        if minutes < 24 * 60 { return "in \(minutes / 60)h \(minutes % 60)m" }
+        return "in \(minutes / (24 * 60))d \(minutes % (24 * 60) / 60)h"
+    }
+
+    private func accessibilityLabel(pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String {
+        [window.label, "\(window.leftPercent)% left", reset(now: now), outlook(pace, verdict: verdict, now: now)]
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
 private struct AgentIcon: View, Themed {
     let id: String
+    var size: CGFloat = 22
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(palette.fill)
+            RoundedRectangle(cornerRadius: size * 6 / 22, style: .continuous).fill(palette.fill)
             if let logo = Self.logo(for: id) {
                 Image(nsImage: logo)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 16, height: 16)
+                    .frame(width: size * 16 / 22, height: size * 16 / 22)
             } else {
                 Image(systemName: "terminal")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: size / 2, weight: .semibold))
             }
         }
         .foregroundStyle(.white.opacity(0.9))
-        .frame(width: 22, height: 22)
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.hairline, lineWidth: 0.5))
+        .frame(width: size, height: size)
+        .overlay(RoundedRectangle(cornerRadius: size * 6 / 22, style: .continuous).strokeBorder(palette.hairline, lineWidth: 0.5))
         .accessibilityHidden(true)
     }
 
@@ -448,15 +781,41 @@ private struct PillSwitchBody: View, Themed {
     }
 }
 
-/// The menu is designed dark only, so force the popover window's appearance.
-private struct DarkWindow: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { view.window?.appearance = NSAppearance(named: .darkAqua) }
+/// The menu is designed dark only, so force the popover window's appearance. Also reports each time
+/// the window comes on screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra.
+private struct MenuWindow: NSViewRepresentable {
+    let onShow: () -> Void
+
+    func makeNSView(context: Context) -> WatchingView {
+        let view = WatchingView()
+        view.onShow = onShow
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: WatchingView, context: Context) {
+        nsView.onShow = onShow
+    }
+
+    final class WatchingView: NSView {
+        var onShow: () -> Void = {}
+        private var observer: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            guard let window else { return }
+            window.appearance = NSAppearance(named: .darkAqua)
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
+                    self.onShow()
+                }
+            }
+            if window.occlusionState.contains(.visible) { onShow() }
+        }
+    }
 }
 
 // MARK: - Transitions

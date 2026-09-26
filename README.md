@@ -59,6 +59,21 @@ When agents finish or ask you something, Afterhours keeps your Mac awake so you 
 
 Change both in **Settings… > Power**.
 
+## Subscription limits
+
+The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: green with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
+
+- **Claude Code**: the Keychain login, one per `~/.claude*` config directory
+- **Codex**: `~/.codex/auth.json`
+- **Cursor**: the Cursor app's state store, or `~/.cursor/auth.json`
+- **Copilot**: `~/.config/github-copilot/apps.json` or the `gh` login
+- **OpenCode Go**: `~/.local/share/opencode/auth.json`
+- **Grok Build**: `~/.grok/auth.json`
+
+Afterhours never stores or refreshes a login. If one expires, run that tool once. Turn it off in **Settings… > Limits**.
+
+If you pool accounts on a [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) hub, add it under **Settings… > Limits > Usage providers** with its URL and management key. Its accounts join the menu, pooled per provider like T3 Code's Limits page: one bar per window with a segment per account. The key is kept in your Keychain, and Afterhours only reads through the hub.
+
 ## Reading the menu bar
 
 The mug's steam shows the state at a glance:

@@ -1,3 +1,4 @@
+import AfterhoursCore
 import Foundation
 import Observation
 
@@ -17,6 +18,11 @@ final class Preferences {
     static let untilSessionsClose = -1
     var turnDisplayOff: Bool { didSet { save(turnDisplayOff, "turnDisplayOff") } }
     var notifications: Bool { didSet { save(notifications, "notifications") } }
+    /// Shows Claude Code and Codex subscription quotas in the menu.
+    var usageLimits: Bool { didSet { save(usageLimits, "usageLimits") } }
+    var limitsExpanded: Bool { didSet { save(limitsExpanded, "limitsExpanded") } }
+    /// CLIProxyAPI hubs whose pooled accounts join the menu. Keys live in the Keychain, not here.
+    var hubs: [UsageHub] { didSet { save((try? JSONEncoder().encode(hubs)) ?? Data(), "usageHubs") } }
     /// A name from /System/Library/Sounds, or "" for none.
     var sound: String { didSet { save(sound, "sound") } }
     /// Stores opt-outs rather than opt-ins, so agents added later are detected by default.
@@ -25,9 +31,10 @@ final class Preferences {
     var detectedAgents: Set<String> { Set(AgentKind.all.map(\.id)).subtracting(disabledAgents) }
 
     @ObservationIgnored var onChange: () -> Void = {}
-    @ObservationIgnored private let defaults = UserDefaults.standard
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         defaults.register(defaults: [
             "enabled": true,
             "batteryThreshold": 15,
@@ -38,6 +45,8 @@ final class Preferences {
             "batteryWaitMinutes": 60,
             "turnDisplayOff": false,
             "notifications": true,
+            "usageLimits": true,
+            "limitsExpanded": false,
             "sound": "Glass",
         ])
         enabled = defaults.bool(forKey: "enabled")
@@ -49,6 +58,9 @@ final class Preferences {
         batteryWaitMinutes = defaults.integer(forKey: "batteryWaitMinutes")
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
+        usageLimits = defaults.bool(forKey: "usageLimits")
+        limitsExpanded = defaults.bool(forKey: "limitsExpanded")
+        hubs = defaults.data(forKey: "usageHubs").flatMap { try? JSONDecoder().decode([UsageHub].self, from: $0) } ?? []
         sound = defaults.string(forKey: "sound") ?? ""
         disabledAgents = Set(defaults.stringArray(forKey: "disabledAgents") ?? [])
     }
