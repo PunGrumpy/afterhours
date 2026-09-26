@@ -15,13 +15,55 @@ public struct UsageWindow: Sendable, Identifiable, Equatable {
     /// 0 to 100.
     public let usedPercent: Double
     public let resetsAt: Date?
+    /// How long the window runs, so the burn rate can be projected to its reset.
+    public let duration: TimeInterval
 
-    public init(id: String, kind: Kind, label: String, usedPercent: Double, resetsAt: Date?) {
+    public init(id: String, kind: Kind, label: String, usedPercent: Double, resetsAt: Date?,
+                duration: TimeInterval? = nil) {
         self.id = id
         self.kind = kind
         self.label = label
         self.usedPercent = min(100, max(0, usedPercent.isFinite ? usedPercent : 0))
         self.resetsAt = resetsAt
+        self.duration = duration ?? kind.defaultDuration
+    }
+
+    public var leftPercent: Double { 100 - usedPercent }
+
+    /// Where the window is heading at the current burn rate, or nil while it's too young to say.
+    public struct Pace: Sendable, Equatable {
+        /// Share of the window elapsed, 0 to 1. The even-pace mark sits at `1 - elapsed` on a bar of what's left.
+        public let elapsed: Double
+        /// What would be left at the reset if the burn rate held; below zero means it runs out first.
+        public let projectedLeft: Double
+        /// When it runs out at this rate, if before the reset.
+        public let runsOutAt: Date?
+
+        public init(elapsed: Double, projectedLeft: Double, runsOutAt: Date?) {
+            self.elapsed = elapsed
+            self.projectedLeft = projectedLeft
+            self.runsOutAt = runsOutAt
+        }
+    }
+
+    /// Needs a reset time, some use, and at least a twentieth of the window behind it.
+    public func pace(now: Date = Date()) -> Pace? {
+        guard let resetsAt, usedPercent > 0, duration > 0 else { return nil }
+        let elapsed = min(1, max(0, (duration - resetsAt.timeIntervalSince(now)) / duration))
+        guard elapsed >= 0.05 else { return nil }
+        let projectedUsed = usedPercent / elapsed
+        let runsOut = projectedUsed > 100 ? now.addingTimeInterval(leftPercent / usedPercent * elapsed * duration) : nil
+        return Pace(elapsed: elapsed, projectedLeft: 100 - projectedUsed, runsOutAt: runsOut)
+    }
+}
+
+public extension UsageWindow.Kind {
+    var defaultDuration: TimeInterval {
+        switch self {
+        case .session: 5 * 3600
+        case .weekly: 7 * 24 * 3600
+        case .monthly: 30 * 24 * 3600
+        }
     }
 }
 
@@ -316,7 +358,7 @@ public enum UsageLimits {
             case .monthly: "Monthly"
             }
             let resetsAt = window.resetAt.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil }
-            return UsageWindow(id: id, kind: kind, label: label, usedPercent: percent, resetsAt: resetsAt)
+            return UsageWindow(id: id, kind: kind, label: label, usedPercent: percent, resetsAt: resetsAt, duration: seconds)
         }
     }
 
