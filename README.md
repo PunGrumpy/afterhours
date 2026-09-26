@@ -38,13 +38,13 @@ Open **Settings… > Agents** and click **Install** for each Claude Code config 
 
 Hooks tell Afterhours when Claude Code is working, waiting for you, or idle. Agents without hooks count as working while their processes use at least 3% of a CPU core, and for 45 seconds after that.
 
-Any tool with hooks or plugins can report its own state:
+Any tool with hooks or plugins can report its own state. Afterhours installs the hook binary at `~/Library/Application Support/Afterhours/bin/afterhours-hook`, not on your PATH, so call it by its full path:
 
 ```bash
-afterhours-hook agent_id --state working --session session_id
+"$HOME/Library/Application Support/Afterhours/bin/afterhours-hook" agent_id --state working --session session_id
 ```
 
-`--state` accepts `working`, `waiting`, `idle`, or `end`.
+`agent_id` is any of the ids Afterhours knows: `claude`, `codex`, `opencode`, `antigravity`, `gemini`, `copilot`, `cursor`, `aider`, `amp`, `droid`, `goose`, `kiro`, `kilo`, `openclaw`, `hermes`, `cline`, or any name you like. `--state` accepts `working`, `waiting`, `idle`, or `end`.
 
 ### 4. Launch at login
 
