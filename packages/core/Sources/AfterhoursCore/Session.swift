@@ -6,6 +6,30 @@ public enum AgentState: String, Codable, Sendable {
     case idle
 }
 
+/// What a hook event means for the session that sent it.
+public enum HookAction: Equatable, Sendable {
+    case set(AgentState)
+    case end
+
+    /// Claude Code event names. Unknown events map to nil so the hook stays quiet.
+    public init?(claudeEvent event: String) {
+        switch event {
+        case "SessionStart", "Stop": self = .set(.idle)
+        case "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact": self = .set(.working)
+        case "Notification", "PermissionRequest": self = .set(.waiting)
+        case "SessionEnd": self = .end
+        default: return nil
+        }
+    }
+
+    /// The `--state` flag of `afterhours-hook`: `working`, `waiting`, `idle`, or `end`. Anything else is nil.
+    public init?(explicitState state: String) {
+        if state == "end" { self = .end; return }
+        guard let agentState = AgentState(rawValue: state) else { return nil }
+        self = .set(agentState)
+    }
+}
+
 /// One hooked agent session, persisted as a JSON file that the hook writes and the app reads.
 public struct SessionRecord: Codable, Sendable, Identifiable {
     public var id: String
