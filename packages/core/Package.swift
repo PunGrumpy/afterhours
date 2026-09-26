@@ -6,5 +6,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [.library(name: "AfterhoursCore", targets: ["AfterhoursCore"])],
     // A library: stays nonisolated so callers decide where it runs.
-    targets: [.target(name: "AfterhoursCore")]
+    targets: [
+        .target(name: "AfterhoursCore"),
+        .testTarget(name: "AfterhoursCoreTests", dependencies: ["AfterhoursCore"]),
+    ]
 )
