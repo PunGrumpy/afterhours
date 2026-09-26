@@ -1,5 +1,13 @@
 # @afterhours/macos
 
+## 0.2.1
+
+### Patch Changes
+
+- 379bc9d: A stuck Claude Code session now times out after 15 minutes even when Afterhours can't match its process to a running agent, and an agent no longer shows up twice when its hook reports a child process. CPU activity is no longer sampled from scans less than a second apart, so a screen redraw can't be mistaken for real work.
+- 7a897d1: A Mac docked to an external display with its lid closed now stays awake when agents finish, when you pause, and when you turn Afterhours off. Afterhours only puts a closed Mac to sleep when closing the lid would sleep it anyway. Stopping Afterhours with `kill` or `pkill` now turns lid-closed mode off before the app exits. A laptop whose battery can't be read no longer counts as plugged in.
+- 807fab5: Lid-closed mode now writes its sudoers rule from the privileged step itself, so nothing else running as your user can change the rule while the password prompt is open.
+
 ## 0.2.0
 
 ### Minor Changes
