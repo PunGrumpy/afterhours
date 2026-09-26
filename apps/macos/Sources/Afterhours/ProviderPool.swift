@@ -12,6 +12,8 @@ struct ProviderPool: Identifiable {
         let resetsAt: Date?
         /// In account order; nil where an account doesn't report this window.
         let segments: [Double?]
+
+        var leftPercent: Int { Int((100 - usedPercent).rounded()) }
     }
 
     let provider: String
