@@ -3,7 +3,7 @@ import app from "../../macos/package.json";
 export const site = {
   author: {
     name: "Noppakorn Kaewsalabnil",
-    url: "https://github.com/PunGrumpy",
+    url: "https://www.pungrumpy.com",
   },
   download: "https://github.com/PunGrumpy/afterhours/releases/latest",
   repo: "https://github.com/PunGrumpy/afterhours",
