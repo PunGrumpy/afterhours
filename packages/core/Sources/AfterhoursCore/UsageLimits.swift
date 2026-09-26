@@ -147,10 +147,12 @@ public enum UsageLimits {
                             hubs: [UsageHub] = []) async -> UsageSnapshot {
         async let claude = readClaude(configDirectories: claudeConfigDirectories)
         async let codex = readCodex(home: codexHome ?? defaultCodexHome)
+        async let others = readOtherProviders()
         async let hubbed = readHubs(hubs.filter(\.enabled))
         var snapshot = UsageSnapshot()
         for account in await claude { merge(account, into: &snapshot.accounts) }
         if let codex = await codex { merge(codex, into: &snapshot.accounts) }
+        for account in await others { merge(account, into: &snapshot.accounts) }
         let (hubAccounts, hubErrors) = await hubbed
         for account in hubAccounts { merge(account, into: &snapshot.accounts) }
         snapshot.hubErrors = hubErrors
@@ -519,20 +521,20 @@ public enum UsageLimits {
         return URLSession(configuration: configuration)
     }()
 
-    private static let snakeCaseDecoder: JSONDecoder = {
+    static let snakeCaseDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }()
 
-    private static func fetch(_ url: URL, token: String, headers: [String: String]) async -> Result<Data, FetchError> {
+    static func fetch(_ url: URL, token: String, headers: [String: String]) async -> Result<Data, FetchError> {
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         return await send(request)
     }
 
-    private static func send(_ request: URLRequest) async -> Result<Data, FetchError> {
+    static func send(_ request: URLRequest) async -> Result<Data, FetchError> {
         let data: Data
         let response: URLResponse
         do {
@@ -545,12 +547,12 @@ public enum UsageLimits {
         return .success(data)
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> Result<T, FetchError> {
+    static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> Result<T, FetchError> {
         (try? snakeCaseDecoder.decode(T.self, from: data)).map(Result.success) ?? .failure(.decoding)
     }
 
     /// Anthropic sends fractional seconds; a formatter parses either way but only one form at a time.
-    private static func parseISO8601(_ text: String) -> Date? {
+    static func parseISO8601(_ text: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: text) { return date }
@@ -558,9 +560,9 @@ public enum UsageLimits {
         return formatter.date(from: text)
     }
 
-    private static func capitalized(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
+    static func capitalized(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
 
-    private static func shortPath(_ url: URL) -> String {
+    static func shortPath(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         let path = url.standardizedFileURL.path
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path

@@ -242,7 +242,7 @@ private struct LimitsTab: View {
             SettingsSection {
                 SettingsToggle(title: "Show subscription limits in the menu", isOn: $prefs.usageLimits)
             } footer: {
-                Text("Reads the Claude Code login from your Keychain with the `security` tool and the Codex login from `~/.codex/auth.json`, then asks Anthropic and OpenAI how much of each window is left. It checks when you open the menu and every 5 minutes while agents work, and never stores or refreshes a login.")
+                Text("Reads the logins Claude Code, Codex, Cursor, Copilot, OpenCode, and Grok Build keep on this Mac, then asks each provider how much of every window is left. It checks when you open the menu and every 5 minutes while agents work, and never stores or refreshes a login.")
             }
 
             SettingsSection("Usage providers") {
