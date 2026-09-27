@@ -110,3 +110,8 @@ jobs:
             gh release create "$tag" --verify-tag --title "Afterhours $version" --notes-file notes.md
           fi
           gh release upload "$tag" apps/macos/dist/* --clobber
+
+  web:
+    needs: app
+    uses: ./.github/workflows/deploy-web.yml
+    secrets: inherit

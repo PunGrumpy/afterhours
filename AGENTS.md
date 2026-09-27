@@ -45,6 +45,7 @@ The app holds a closed Mac awake with IOKit power assertions that die the instan
 
 - A user-facing change to the app needs a changeset: run `bun changeset`, choose `@afterhours/macos`, and write the summary in the second person for the changelog. Changesets ignores `@afterhours/core` and `@afterhours/web`.
 - Merging to `main` lets the Release workflow open a "Version Packages" pull request. Merging that tags `@afterhours/macos@x.y.z` and uploads the `.dmg` and `.zip`.
+- The website deploys through a Vercel deploy hook, not on every push to `main`. The Release workflow calls it after it uploads the app, so the version on the site never runs ahead of the download, and pushes that change `apps/web` call it right away. `apps/web/vercel.json` turns off Vercel's own deploys of `main` and the release branches.
 - PR titles follow `type: Capitalized subject`, where `type` is one of `fix feat chore ci docs refactor perf test style` and no scope is allowed. Commit subjects follow the same shape without the type.
 
 ---
