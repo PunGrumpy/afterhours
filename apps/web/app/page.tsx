@@ -1,67 +1,22 @@
-import type { VariantProps } from "class-variance-authority";
-import { cn } from "cn";
-import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 
 import { AgentMarquee } from "@/components/agent-marquee";
 import { BrewCommand } from "@/components/brew-command";
+import { DownloadButton, GitHubButton } from "@/components/buttons";
 import { Demo } from "@/components/demo";
 import { Features } from "@/components/features";
-import { AppleIcon, GitHubIcon } from "@/components/icons";
-import { Logo } from "@/components/logo";
 import { Mug } from "@/components/mug";
-import { pill, pillIcon } from "@/components/pill";
 import { site } from "@/components/site";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 
 const riseDelay = (index: number): CSSProperties => ({
   animationDelay: `${index * 60}ms`,
 });
 
-const DownloadButton = ({ size }: VariantProps<typeof pill>) => (
-  <a href={site.download} className={pill({ intent: "primary", size })}>
-    <AppleIcon className={cn("-mt-0.5", pillIcon({ size }))} />
-    Download for Mac
-  </a>
-);
-
-const GitHubButton = ({ size }: VariantProps<typeof pill>) => (
-  <a href={site.repo} className={pill({ intent: "secondary", size })}>
-    <GitHubIcon className={pillIcon({ size })} />
-    GitHub
-  </a>
-);
-
-const FooterLink = ({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) => (
-  <a href={href} className="text-ink/60 hover:text-ink">
-    {children}
-  </a>
-);
-
 const Page = () => (
   <div className="overflow-x-clip">
-    <header className="mx-auto flex max-w-[1216px] items-center justify-between px-6 py-4">
-      <Link href="/" aria-label="Afterhours home" className="press">
-        <Logo className="h-7 w-auto" />
-      </Link>
-      <nav className="flex items-center gap-2">
-        <a
-          href="#details"
-          className="text-ink/70 hover:text-ink hidden px-3 text-[14px] sm:block"
-        >
-          Details
-        </a>
-        <span className="hidden sm:block">
-          <GitHubButton size="small" />
-        </span>
-        <DownloadButton size="small" />
-      </nav>
-    </header>
+    <SiteHeader />
 
     <main>
       <section className="mx-auto flex max-w-[1216px] flex-col items-center px-6 pt-16 text-center md:pt-24">
@@ -152,37 +107,7 @@ const Page = () => (
       </section>
     </main>
 
-    <footer className="border-ink/[0.08] mx-auto mt-36 max-w-[1216px] border-t px-6 pt-10 pb-12">
-      <div className="flex flex-col gap-8 md:flex-row md:justify-between">
-        <div>
-          <Logo className="h-6 w-auto" />
-          <p className="text-ink/50 mt-3 text-[13px]">
-            Brewed late at night by{" "}
-            <a
-              href={site.author.url}
-              className="text-ink/80 hover:text-ink font-medium"
-            >
-              {site.author.name}
-            </a>
-            .
-          </p>
-        </div>
-        <nav
-          aria-label="Footer"
-          className="grid grid-cols-2 gap-x-16 gap-y-2 text-[14px]"
-        >
-          <p className="text-ink font-medium">Product</p>
-          <p className="text-ink font-medium">Source</p>
-          <FooterLink href="#details">Details</FooterLink>
-          <FooterLink href={site.repo}>GitHub</FooterLink>
-          <FooterLink href={site.download}>Download</FooterLink>
-          <FooterLink href={`${site.repo}/releases`}>Releases</FooterLink>
-        </nav>
-      </div>
-      <p className="text-ink/40 mt-10 text-[12px]">
-        Agent logos are trademarks of their owners.
-      </p>
-    </footer>
+    <SiteFooter className="mt-36" />
   </div>
 );
 

@@ -13,7 +13,10 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   description:
     "A menu bar app that keeps your Mac awake while coding agents work, even with the lid closed. When the last agent finishes, your Mac sleeps again.",
-  title: "Afterhours — Keep your Mac awake for your coding agents",
+  title: {
+    default: "Afterhours — Keep your Mac awake for your coding agents",
+    template: "%s · Afterhours",
+  },
 };
 
 export const viewport: Viewport = {
