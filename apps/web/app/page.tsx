@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { AgentMarquee } from "@/components/agent-marquee";
@@ -20,8 +21,8 @@ const Page = () => (
 
     <main>
       <section className="mx-auto flex max-w-[1216px] flex-col items-center px-6 pt-16 text-center md:pt-24">
-        <a
-          href={`${site.repo}/releases`}
+        <Link
+          href="/changelog"
           className="rise bg-surface text-ink/80 hover:text-ink inline-flex h-9 items-center gap-2.5 rounded-full pr-3.5 pl-1.5 text-[13px] font-medium"
         >
           <span className="bg-ink text-canvas rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums">
@@ -31,7 +32,7 @@ const Page = () => (
           <span aria-hidden="true" className="text-ink/40">
             ›
           </span>
-        </a>
+        </Link>
         <h1
           className="rise mt-7 font-serif text-[clamp(3rem,8vw,5.25rem)] leading-[1.02] tracking-[-0.03em]"
           style={riseDelay(1)}
