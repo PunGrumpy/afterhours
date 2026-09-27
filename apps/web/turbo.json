@@ -2,7 +2,12 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/macos/CHANGELOG.md",
+        "$TURBO_ROOT$/apps/macos/package.json"
+      ]
     }
   }
 }

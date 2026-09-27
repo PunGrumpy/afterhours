@@ -99,3 +99,18 @@ export const CheckIcon = ({ className }: IconProps) => (
     <path d="m3.25 8.5 3 3 6.5-7" />
   </svg>
 );
+
+export const ChevronIcon = ({ className }: IconProps) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <path d="m6 3.5 4.5 4.5L6 12.5" />
+  </svg>
+);

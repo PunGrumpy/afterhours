@@ -57,6 +57,7 @@ export const SiteFooter = ({ className }: { className?: string }) => (
       >
         <FooterColumn title="Product">
           <FooterLink href="/#details">Details</FooterLink>
+          <FooterLink href="/changelog">Changelog</FooterLink>
           <FooterLink href={site.download}>Download</FooterLink>
         </FooterColumn>
         <FooterColumn title="Source">

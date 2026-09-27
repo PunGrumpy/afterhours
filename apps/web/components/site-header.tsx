@@ -10,6 +10,12 @@ export const SiteHeader = () => (
     </Link>
     <nav className="flex items-center gap-2">
       <Link
+        href="/changelog"
+        className="text-ink/70 hover:text-ink hidden px-3 text-[14px] sm:block"
+      >
+        Changelog
+      </Link>
+      <Link
         href="/#details"
         className="text-ink/70 hover:text-ink hidden px-3 text-[14px] sm:block"
       >
