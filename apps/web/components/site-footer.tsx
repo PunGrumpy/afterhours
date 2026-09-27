@@ -53,7 +53,7 @@ export const SiteFooter = ({ className }: { className?: string }) => (
       </div>
       <nav
         aria-label="Footer"
-        className="grid grid-cols-2 gap-x-16 gap-y-8 text-[14px]"
+        className="grid grid-cols-2 gap-x-16 gap-y-8 text-[14px] sm:grid-cols-3"
       >
         <FooterColumn title="Product">
           <FooterLink href="/#details">Details</FooterLink>
@@ -62,6 +62,11 @@ export const SiteFooter = ({ className }: { className?: string }) => (
         <FooterColumn title="Source">
           <FooterLink href={site.repo}>GitHub</FooterLink>
           <FooterLink href={`${site.repo}/releases`}>Releases</FooterLink>
+        </FooterColumn>
+        <FooterColumn title="Legal">
+          <FooterLink href="/privacy">Privacy</FooterLink>
+          <FooterLink href="/terms">Terms</FooterLink>
+          <FooterLink href="/legal">Licenses</FooterLink>
         </FooterColumn>
       </nav>
     </div>
