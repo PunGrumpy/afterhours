@@ -65,12 +65,12 @@ const Page = async () => {
                   >
                     <Link
                       href={`/changelog/${release.slug}`}
-                      className="hover:bg-ink/[0.03] -mx-3 flex items-center gap-3 rounded-[10px] px-3 py-3.5"
+                      className="group flex items-center gap-3 py-3.5"
                     >
                       <span className="text-ink shrink-0 text-[15px] font-medium tabular-nums">
                         v{release.version}
                       </span>
-                      <span className="text-ink/50 min-w-0 flex-1 truncate text-[14px] max-sm:hidden">
+                      <span className="text-ink/50 group-hover:text-ink/75 min-w-0 flex-1 truncate text-[14px] max-sm:hidden">
                         {oneLine(release)}
                       </span>
                       <span className="bg-ink/[0.06] text-ink/60 ml-auto shrink-0 rounded-full px-2 py-0.5 text-[12px]">
