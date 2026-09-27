@@ -68,3 +68,34 @@ export const BatteryIcon = ({
     />
   </svg>
 );
+
+export const CopyIcon = ({ className }: IconProps) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <rect x="5.25" y="5.25" width="8.5" height="8.5" rx="2" />
+    <path d="M10.75 3.25A1.75 1.75 0 0 0 9 2.25H4.25a2 2 0 0 0-2 2V9a1.75 1.75 0 0 0 1 1.58" />
+  </svg>
+);
+
+export const CheckIcon = ({ className }: IconProps) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <path d="m3.25 8.5 3 3 6.5-7" />
+  </svg>
+);

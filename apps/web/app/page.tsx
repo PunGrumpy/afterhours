@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 import { AgentMarquee } from "@/components/agent-marquee";
+import { BrewCommand } from "@/components/brew-command";
 import { Demo } from "@/components/demo";
 import { Features } from "@/components/features";
 import { AppleIcon, GitHubIcon } from "@/components/icons";
@@ -98,9 +99,13 @@ const Page = () => (
           <DownloadButton />
           <GitHubButton />
         </div>
-        <p className="rise text-ink/45 mt-4 text-[13px]" style={riseDelay(3)}>
-          For macOS 14 or later
-        </p>
+        <div
+          className="rise mt-3 flex max-w-full flex-col items-center gap-3"
+          style={riseDelay(3)}
+        >
+          <BrewCommand />
+          <p className="text-ink/45 text-[13px]">For macOS 14 or later</p>
+        </div>
 
         <div className="rise mt-14 w-full" style={riseDelay(4)}>
           <AgentMarquee />
@@ -140,8 +145,9 @@ const Page = () => (
           <br />
           <em className="italic">Let them ship.</em>
         </h2>
-        <div className="mt-9">
+        <div className="mt-9 flex max-w-full flex-col items-center gap-3">
           <DownloadButton />
+          <BrewCommand />
         </div>
       </section>
     </main>
