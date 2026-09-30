@@ -23,6 +23,14 @@ public enum Proc {
         return String(decoding: buf.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
+    /// Absolute path of the executable, with symlinks resolved.
+    public static func executablePath(_ pid: Int32) -> String? {
+        var buf = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let length = proc_pidpath(pid, &buf, UInt32(buf.count))
+        guard length > 0 else { return nil }
+        return String(decoding: buf.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
     public static func parent(_ pid: Int32) -> Int32? {
         var info = proc_bsdshortinfo()
         let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)

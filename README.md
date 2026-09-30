@@ -10,7 +10,7 @@ Your agents work after hours, this keeps your Mac awake for them.
 
 Afterhours is a menu bar app that keeps your Mac awake while coding agents work, even with the lid closed. When the last agent finishes, it lets your Mac sleep again.
 
-Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CLI, Cursor CLI, Aider, Amp, Droid, Goose, Kiro CLI, Kilo CLI, OpenClaw, Hermes Agent, and Cline CLI.
+Works with Claude Code, Codex, OpenCode, Antigravity CLI, Gemini CLI, Copilot CLI, Cursor CLI, Aider, Amp, Droid, Goose, Kiro CLI, Kilo CLI, OpenClaw, Hermes Agent, Cline CLI, Grok Build, Qwen Code, Crush, Pi, and fx.
 
 ## Install
 
@@ -50,7 +50,7 @@ Any tool with hooks or plugins can report its own state. Afterhours installs the
 "$HOME/Library/Application Support/Afterhours/bin/afterhours-hook" agent_id --state working --session session_id
 ```
 
-`agent_id` is any of the ids Afterhours knows: `claude`, `codex`, `opencode`, `antigravity`, `gemini`, `copilot`, `cursor`, `aider`, `amp`, `droid`, `goose`, `kiro`, `kilo`, `openclaw`, `hermes`, `cline`, or any name you like. `--state` accepts `working`, `waiting`, `idle`, or `end`.
+`agent_id` is any of the ids Afterhours knows: `claude`, `codex`, `opencode`, `antigravity`, `gemini`, `copilot`, `cursor`, `aider`, `amp`, `droid`, `goose`, `kiro`, `kilo`, `openclaw`, `hermes`, `cline`, `grok`, `qwen`, `crush`, `pi`, `fx`, or any name you like. `--state` accepts `working`, `waiting`, `idle`, or `end`.
 
 ### 4. Launch at login
 

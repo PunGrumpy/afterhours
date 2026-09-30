@@ -7,17 +7,24 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     let processNames: Set<String>
     /// Substrings to look for in argv when the agent runs under node, bun, or python.
     let argvMarkers: [String]
+    /// Exact `process.title` values, which replace argv when the agent runs under node or bun.
+    let titles: Set<String>
     let commands: Set<String>
     let excludedArgv: [String]
+    /// When set, only these files count, because another tool ships a binary with the same name.
+    let executables: Set<String>
 
     init(id: String, displayName: String, processNames: Set<String>, argvMarkers: [String],
-         commands: Set<String>? = nil, excludedArgv: [String] = []) {
+         titles: Set<String> = [], commands: Set<String>? = nil, excludedArgv: [String] = [],
+         executables: Set<String> = []) {
         self.id = id
         self.displayName = displayName
         self.processNames = processNames
         self.argvMarkers = argvMarkers
+        self.titles = titles
         self.commands = commands ?? processNames
         self.excludedArgv = excludedArgv
+        self.executables = executables
     }
 
     static let all: [AgentKind] = [
@@ -52,6 +59,19 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         AgentKind(id: "cline", displayName: "Cline CLI", processNames: ["cline", ".cline"],
                   argvMarkers: ["node_modules/cline/bin/cline"], commands: ["cline"],
                   excludedArgv: ["--cline-hub-daemon"]),
+        // The installer symlinks `grok` to a download named after the platform, and a process takes the target's name.
+        AgentKind(id: "grok", displayName: "Grok Build",
+                  processNames: ["grok", "grok-macos-aarch64", "grok-macos-x86_64", "xai-grok-pager"],
+                  argvMarkers: [], commands: ["grok"]),
+        AgentKind(id: "qwen", displayName: "Qwen Code", processNames: [],
+                  argvMarkers: ["@qwen-code/qwen-code", "/bin/qwen"], commands: ["qwen"]),
+        AgentKind(id: "crush", displayName: "Crush", processNames: ["crush"], argvMarkers: ["@charmland/crush"]),
+        // "pi" is too short to search argv for, so match the title it sets exactly.
+        AgentKind(id: "pi", displayName: "Pi", processNames: [], argvMarkers: ["pi-coding-agent"], titles: ["pi"],
+                  commands: ["pi"]),
+        // The fx JSON viewer shares the name, so only the copy fx.sh's installer puts in ~/.local/bin counts.
+        AgentKind(id: "fx", displayName: "fx", processNames: ["fx"], argvMarkers: [],
+                  executables: ["\(NSHomeDirectory())/.local/bin/fx"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -62,13 +82,14 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         var dirs = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/homebrew/bin", "\(home)/.local/bin",
                     "\(home)/.bun/bin", "\(home)/.npm-global/bin", "\(home)/.volta/bin", "\(home)/.cargo/bin",
                     "\(home)/.opencode/bin", "\(home)/.claude/local", "\(home)/.amp/bin",
-                    "/Applications/Kiro CLI.app/Contents/MacOS"]
+                    "\(home)/.grok/bin", "/Applications/Kiro CLI.app/Contents/MacOS"]
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let path = Power.run(shell, ["-lc", "printf %s \"$PATH\""]).output
         dirs += path.split(separator: ":").map(String.init)
         let fm = FileManager.default
         return Set(all.filter { kind in
-            kind.commands.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
+            if !kind.executables.isEmpty { return kind.executables.contains { fm.isExecutableFile(atPath: $0) } }
+            return kind.commands.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
         }.map(\.id))
     }
 
@@ -147,23 +168,28 @@ struct ActivityTracker {
 
     private func match(pid: Int32, name: String, enabled: Set<String>) -> AgentKind? {
         let candidates = AgentKind.all.filter { enabled.contains($0.id) }
-        var argv: String?
-        func arguments() -> String {
+        var argv: [String]?
+        func arguments() -> [String] {
             if let argv { return argv }
-            let joined = Proc.arguments(pid).prefix(4).joined(separator: " ")
-            argv = joined
-            return joined
+            let prefix = Array(Proc.arguments(pid).prefix(4))
+            argv = prefix
+            return prefix
         }
+        func joined() -> String { arguments().joined(separator: " ") }
         let kind: AgentKind?
         if let named = candidates.first(where: { $0.processNames.contains(name) }) {
             kind = named
         } else if AgentKind.isInterpreter(name) {
-            kind = candidates.first { kind in kind.argvMarkers.contains { arguments().contains($0) } }
+            kind = candidates.first { kind in
+                arguments().first.map(kind.titles.contains) == true
+                    || kind.argvMarkers.contains { joined().contains($0) }
+            }
         } else {
             kind = nil
         }
         guard let kind else { return nil }
-        if kind.excludedArgv.contains(where: { arguments().contains($0) }) { return nil }
+        if kind.excludedArgv.contains(where: { joined().contains($0) }) { return nil }
+        if !kind.executables.isEmpty, !kind.executables.contains(Proc.executablePath(pid) ?? "") { return nil }
         return kind
     }
 
