@@ -7,15 +7,18 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     let processNames: Set<String>
     /// Substrings to look for in argv when the agent runs under node, bun, or python.
     let argvMarkers: [String]
+    /// Exact `process.title` values, which replace argv when the agent runs under node or bun.
+    let titles: Set<String>
     let commands: Set<String>
     let excludedArgv: [String]
 
     init(id: String, displayName: String, processNames: Set<String>, argvMarkers: [String],
-         commands: Set<String>? = nil, excludedArgv: [String] = []) {
+         titles: Set<String> = [], commands: Set<String>? = nil, excludedArgv: [String] = []) {
         self.id = id
         self.displayName = displayName
         self.processNames = processNames
         self.argvMarkers = argvMarkers
+        self.titles = titles
         self.commands = commands ?? processNames
         self.excludedArgv = excludedArgv
     }
@@ -59,6 +62,9 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         AgentKind(id: "qwen", displayName: "Qwen Code", processNames: [],
                   argvMarkers: ["@qwen-code/qwen-code", "/bin/qwen"], commands: ["qwen"]),
         AgentKind(id: "crush", displayName: "Crush", processNames: ["crush"], argvMarkers: ["@charmland/crush"]),
+        // "pi" is too short to search argv for, so match the title it sets exactly.
+        AgentKind(id: "pi", displayName: "Pi", processNames: [], argvMarkers: ["pi-coding-agent"], titles: ["pi"],
+                  commands: ["pi"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -154,23 +160,27 @@ struct ActivityTracker {
 
     private func match(pid: Int32, name: String, enabled: Set<String>) -> AgentKind? {
         let candidates = AgentKind.all.filter { enabled.contains($0.id) }
-        var argv: String?
-        func arguments() -> String {
+        var argv: [String]?
+        func arguments() -> [String] {
             if let argv { return argv }
-            let joined = Proc.arguments(pid).prefix(4).joined(separator: " ")
-            argv = joined
-            return joined
+            let prefix = Array(Proc.arguments(pid).prefix(4))
+            argv = prefix
+            return prefix
         }
+        func joined() -> String { arguments().joined(separator: " ") }
         let kind: AgentKind?
         if let named = candidates.first(where: { $0.processNames.contains(name) }) {
             kind = named
         } else if AgentKind.isInterpreter(name) {
-            kind = candidates.first { kind in kind.argvMarkers.contains { arguments().contains($0) } }
+            kind = candidates.first { kind in
+                arguments().first.map(kind.titles.contains) == true
+                    || kind.argvMarkers.contains { joined().contains($0) }
+            }
         } else {
             kind = nil
         }
         guard let kind else { return nil }
-        if kind.excludedArgv.contains(where: { arguments().contains($0) }) { return nil }
+        if kind.excludedArgv.contains(where: { joined().contains($0) }) { return nil }
         return kind
     }
 
