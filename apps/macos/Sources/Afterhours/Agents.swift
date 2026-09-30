@@ -58,6 +58,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
                   argvMarkers: [], commands: ["grok"]),
         AgentKind(id: "qwen", displayName: "Qwen Code", processNames: [],
                   argvMarkers: ["@qwen-code/qwen-code", "/bin/qwen"], commands: ["qwen"]),
+        AgentKind(id: "crush", displayName: "Crush", processNames: ["crush"], argvMarkers: ["@charmland/crush"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
