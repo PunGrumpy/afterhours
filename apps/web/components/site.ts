@@ -31,4 +31,5 @@ export const agents = [
   { id: "hermes", name: "Hermes Agent" },
   { id: "cline", name: "Cline CLI" },
   { id: "grok", name: "Grok Build" },
+  { id: "qwen", name: "Qwen Code" },
 ] as const;

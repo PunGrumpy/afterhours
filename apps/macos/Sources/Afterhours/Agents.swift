@@ -56,6 +56,8 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         AgentKind(id: "grok", displayName: "Grok Build",
                   processNames: ["grok", "grok-macos-aarch64", "grok-macos-x86_64", "xai-grok-pager"],
                   argvMarkers: [], commands: ["grok"]),
+        AgentKind(id: "qwen", displayName: "Qwen Code", processNames: [],
+                  argvMarkers: ["@qwen-code/qwen-code", "/bin/qwen"], commands: ["qwen"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
