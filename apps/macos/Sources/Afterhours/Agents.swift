@@ -11,9 +11,12 @@ nonisolated struct AgentKind: Identifiable, Hashable {
     let titles: Set<String>
     let commands: Set<String>
     let excludedArgv: [String]
+    /// When set, only these files count, because another tool ships a binary with the same name.
+    let executables: Set<String>
 
     init(id: String, displayName: String, processNames: Set<String>, argvMarkers: [String],
-         titles: Set<String> = [], commands: Set<String>? = nil, excludedArgv: [String] = []) {
+         titles: Set<String> = [], commands: Set<String>? = nil, excludedArgv: [String] = [],
+         executables: Set<String> = []) {
         self.id = id
         self.displayName = displayName
         self.processNames = processNames
@@ -21,6 +24,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         self.titles = titles
         self.commands = commands ?? processNames
         self.excludedArgv = excludedArgv
+        self.executables = executables
     }
 
     static let all: [AgentKind] = [
@@ -65,6 +69,9 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         // "pi" is too short to search argv for, so match the title it sets exactly.
         AgentKind(id: "pi", displayName: "Pi", processNames: [], argvMarkers: ["pi-coding-agent"], titles: ["pi"],
                   commands: ["pi"]),
+        // The fx JSON viewer shares the name, so only the copy fx.sh's installer puts in ~/.local/bin counts.
+        AgentKind(id: "fx", displayName: "fx", processNames: ["fx"], argvMarkers: [],
+                  executables: ["\(NSHomeDirectory())/.local/bin/fx"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -81,7 +88,8 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         dirs += path.split(separator: ":").map(String.init)
         let fm = FileManager.default
         return Set(all.filter { kind in
-            kind.commands.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
+            if !kind.executables.isEmpty { return kind.executables.contains { fm.isExecutableFile(atPath: $0) } }
+            return kind.commands.contains { name in dirs.contains { fm.isExecutableFile(atPath: "\($0)/\(name)") } }
         }.map(\.id))
     }
 
@@ -181,6 +189,7 @@ struct ActivityTracker {
         }
         guard let kind else { return nil }
         if kind.excludedArgv.contains(where: { joined().contains($0) }) { return nil }
+        if !kind.executables.isEmpty, !kind.executables.contains(Proc.executablePath(pid) ?? "") { return nil }
         return kind
     }
 
