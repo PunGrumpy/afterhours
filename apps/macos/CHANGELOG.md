@@ -1,5 +1,12 @@
 # @afterhours/macos
 
+## 0.2.2
+
+### Patch Changes
+
+- ce7587b: The Limits section now names your Codex plan the way Codex does. "Prolite" becomes "Pro", the plan that showed as "Pro" becomes "Pro (More)", and "Edu_plus" becomes "Edu Plus".
+- 41ab3f7: Afterhours now detects Grok Build, Qwen Code, Crush, Pi, and fx, so your Mac stays awake while they work. It only counts the fx that fx.sh installs in `~/.local/bin`, so leaving the fx JSON viewer open won't keep your Mac awake.
+
 ## 0.2.1
 
 ### Patch Changes
