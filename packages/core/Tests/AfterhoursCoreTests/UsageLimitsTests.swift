@@ -106,7 +106,7 @@ private let codexFixture = Data("""
 
 @Test func codexAccountMapsBothWindowsWithTheirDurations() {
     let account = UsageLimits.codexAccount(.success(codexFixture), fallbackPlan: nil, locations: ["~/.codex"], source: nil)
-    #expect(account.plan == "Pro")
+    #expect(account.plan == "Pro (More)")
     #expect(account.windows.map(\.id) == ["primary", "secondary"])
     #expect(account.windows.map(\.kind) == [.session, .weekly])
     #expect(account.windows.map(\.duration) == [18000, 604800])
@@ -120,6 +120,18 @@ private let codexFixture = Data("""
     #expect(account.windows.count == 1)
     #expect(account.windows[0].duration == 5 * 3600)
     #expect(account.id == "Hub:codex:a@b.c")
+}
+
+@Test(arguments: [
+    ("prolite", "Pro"),
+    ("pro", "Pro (More)"),
+    ("promax", "Pro (Max)"),
+    ("ent26", "Enterprise"),
+    ("edu_plus", "Edu Plus"),
+    ("self_serve_business_usage_based", "Self Serve Business Usage Based"),
+])
+func codexPlanNameMatchesTheNameCodexShows(id: String, name: String) {
+    #expect(UsageLimits.codexPlanName(id) == name)
 }
 
 // MARK: - Merging logins that are one account
