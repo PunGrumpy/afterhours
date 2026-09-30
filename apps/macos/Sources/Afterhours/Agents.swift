@@ -52,6 +52,10 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         AgentKind(id: "cline", displayName: "Cline CLI", processNames: ["cline", ".cline"],
                   argvMarkers: ["node_modules/cline/bin/cline"], commands: ["cline"],
                   excludedArgv: ["--cline-hub-daemon"]),
+        // The installer symlinks `grok` to a download named after the platform, and a process takes the target's name.
+        AgentKind(id: "grok", displayName: "Grok Build",
+                  processNames: ["grok", "grok-macos-aarch64", "grok-macos-x86_64", "xai-grok-pager"],
+                  argvMarkers: [], commands: ["grok"]),
     ]
 
     static func named(_ id: String) -> AgentKind? { all.first { $0.id == id } }
@@ -62,7 +66,7 @@ nonisolated struct AgentKind: Identifiable, Hashable {
         var dirs = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/homebrew/bin", "\(home)/.local/bin",
                     "\(home)/.bun/bin", "\(home)/.npm-global/bin", "\(home)/.volta/bin", "\(home)/.cargo/bin",
                     "\(home)/.opencode/bin", "\(home)/.claude/local", "\(home)/.amp/bin",
-                    "/Applications/Kiro CLI.app/Contents/MacOS"]
+                    "\(home)/.grok/bin", "/Applications/Kiro CLI.app/Contents/MacOS"]
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let path = Power.run(shell, ["-lc", "printf %s \"$PATH\""]).output
         dirs += path.split(separator: ":").map(String.init)

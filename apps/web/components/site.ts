@@ -30,4 +30,5 @@ export const agents = [
   { id: "openclaw", name: "OpenClaw" },
   { id: "hermes", name: "Hermes Agent" },
   { id: "cline", name: "Cline CLI" },
+  { id: "grok", name: "Grok Build" },
 ] as const;
