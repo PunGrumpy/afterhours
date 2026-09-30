@@ -334,10 +334,10 @@ public enum UsageLimits {
                              locations: [String], source: String?) -> UsageAccount {
         switch result.flatMap({ decode(CodexUsage.self, from: $0) }) {
         case .success(let usage):
-            UsageAccount(provider: "codex", plan: (usage.planType ?? fallbackPlan).map(capitalized),
+            UsageAccount(provider: "codex", plan: (usage.planType ?? fallbackPlan).map(codexPlanName),
                          locations: locations, source: source, windows: codexWindows(usage))
         case .failure(let error):
-            UsageAccount(provider: "codex", plan: fallbackPlan.map(capitalized), locations: locations,
+            UsageAccount(provider: "codex", plan: fallbackPlan.map(codexPlanName), locations: locations,
                          source: source, windows: [],
                          error: error.message(signIn: "Run codex once to refresh its login"))
         }
@@ -375,6 +375,20 @@ public enum UsageLimits {
               let auth = json["https://api.openai.com/auth"] as? [String: Any]
         else { return nil }
         return auth["chatgpt_account_id"] as? String
+    }
+
+    /// Names a plan the way Codex does, because some plan ids don't match the plan's name.
+    static func codexPlanName(_ id: String) -> String {
+        switch id {
+        case "prolite": "Pro"
+        case "pro": "Pro (More)"
+        case "promax": "Pro (Max)"
+        case "ent26": "Enterprise"
+        case "self_serve_business_prolite": "Self Serve Business ProLite"
+        case "enterprise_cbp_automation": "Enterprise (Automation)"
+        case "enterprise_cbp_usage_based": "Enterprise CBP Usage Based"
+        default: id.split(separator: "_").map { capitalized(String($0)) }.joined(separator: " ")
+        }
     }
 
     // MARK: - CLIProxyAPI hubs
