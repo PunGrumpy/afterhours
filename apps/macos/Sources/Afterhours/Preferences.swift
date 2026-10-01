@@ -18,6 +18,8 @@ final class Preferences {
     static let untilSessionsClose = -1
     var turnDisplayOff: Bool { didSet { save(turnDisplayOff, "turnDisplayOff") } }
     var notifications: Bool { didSet { save(notifications, "notifications") } }
+    /// Off hides the icon; opening the app again from Finder or Spotlight shows Settings instead.
+    var showInMenuBar: Bool { didSet { save(showInMenuBar, "showInMenuBar") } }
     /// Shows Claude Code and Codex subscription quotas in the menu.
     var usageLimits: Bool { didSet { save(usageLimits, "usageLimits") } }
     var limitsExpanded: Bool { didSet { save(limitsExpanded, "limitsExpanded") } }
@@ -45,6 +47,7 @@ final class Preferences {
             "batteryWaitMinutes": 60,
             "turnDisplayOff": false,
             "notifications": true,
+            "showInMenuBar": true,
             "usageLimits": true,
             "limitsExpanded": false,
             "sound": "Glass",
@@ -58,6 +61,7 @@ final class Preferences {
         batteryWaitMinutes = defaults.integer(forKey: "batteryWaitMinutes")
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
+        showInMenuBar = defaults.bool(forKey: "showInMenuBar")
         usageLimits = defaults.bool(forKey: "usageLimits")
         limitsExpanded = defaults.bool(forKey: "limitsExpanded")
         hubs = defaults.data(forKey: "usageHubs").flatMap { try? JSONDecoder().decode([UsageHub].self, from: $0) } ?? []

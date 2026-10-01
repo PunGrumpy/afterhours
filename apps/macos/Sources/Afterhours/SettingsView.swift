@@ -69,11 +69,16 @@ private struct GeneralTab: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+                SettingsToggle(title: "Show in menu bar", isOn: $prefs.showInMenuBar)
                 SettingsRow("Turn Afterhours on or off") {
                     Text("⌥⌘L").foregroundStyle(.secondary)
                 }
             } footer: {
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                } else if !prefs.showInMenuBar {
+                    Text("Open Afterhours again from Applications or Spotlight to get back here.")
+                }
             }
 
             SettingsSection("Alerts") {

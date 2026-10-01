@@ -60,7 +60,8 @@ struct AfterhoursApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        @Bindable var prefs = model.prefs
+        MenuBarExtra(isInserted: $prefs.showInMenuBar) {
             MenuView(model: model, prefs: model.prefs)
         } label: {
             Image(nsImage: Mug.image(Mug.Mood(model.state)))
@@ -74,7 +75,8 @@ struct AfterhoursApp: App {
     }
 }
 
-/// Opening Afterhours again while it runs shows Settings, a way in when a crowded menu bar hides the icon.
+/// Opening Afterhours again while it runs shows Settings, the only way back when the menu bar icon is
+/// hidden by you or by a crowded menu bar.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         // SwiftUI offers `openSettings` only to views, so press the app menu's Settings item instead.
