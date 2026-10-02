@@ -41,7 +41,8 @@ private enum Motion {
     /// A spring, so a switch flipped again mid-flight reverses smoothly.
     static let knob = Animation.spring(duration: 0.25, bounce: 0)
     /// Critically damped: nothing here carries momentum, so nothing overshoots. Reversible mid-flight.
-    static let settle = Animation.spring(duration: 0.35, bounce: 0)
+    /// Under 300 ms because Limits opens and closes many times a day.
+    static let settle = Animation.spring(duration: 0.25, bounce: 0)
 }
 
 struct MenuView: View, Themed {
