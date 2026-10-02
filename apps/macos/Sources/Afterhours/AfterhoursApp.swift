@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct AfterhoursApp: App {
     @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     /// `Afterhours --snapshot out.png [expanded]` renders the menu with sample data and exits, so the
     /// design can be reviewed without clicking through the menu bar.
@@ -59,7 +60,8 @@ struct AfterhoursApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        @Bindable var prefs = model.prefs
+        MenuBarExtra(isInserted: $prefs.showInMenuBar) {
             MenuView(model: model, prefs: model.prefs)
         } label: {
             Image(nsImage: Mug.image(Mug.Mood(model.state)))
@@ -70,5 +72,18 @@ struct AfterhoursApp: App {
         Settings {
             SettingsView(model: model, prefs: model.prefs)
         }
+    }
+}
+
+/// Opening Afterhours again while it runs shows Settings, the only way back when the menu bar icon is
+/// hidden by you or by a crowded menu bar.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        // SwiftUI offers `openSettings` only to views, so press the app menu's Settings item instead.
+        guard let menu = NSApp.mainMenu?.items.first?.submenu,
+              let index = menu.items.firstIndex(where: { $0.keyEquivalent == "," }) else { return true }
+        NSApp.activate()
+        menu.performActionForItem(at: index)
+        return false
     }
 }
