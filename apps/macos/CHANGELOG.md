@@ -1,5 +1,13 @@
 # @afterhours/macos
 
+## 0.2.3
+
+### Patch Changes
+
+- 9dfd42f: Limits opens and closes faster, in 0.25 seconds instead of 0.35, and usage bars reach their new length just as quickly.
+- a296f46: You can hide the Afterhours icon with Settings > General > Show in menu bar. Afterhours keeps your Mac awake while the icon is hidden, and opening it again from Applications or Spotlight brings back Settings.
+- a296f46: Opening Afterhours again from Applications or Spotlight while it runs now shows Settings, so you can reach it when a crowded menu bar hides the icon.
+
 ## 0.2.2
 
 ### Patch Changes
