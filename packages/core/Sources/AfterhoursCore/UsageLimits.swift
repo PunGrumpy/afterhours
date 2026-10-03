@@ -24,8 +24,24 @@ public struct UsageWindow: Sendable, Identifiable, Equatable {
         self.kind = kind
         self.label = label
         self.usedPercent = min(100, max(0, usedPercent.isFinite ? usedPercent : 0))
-        self.resetsAt = resetsAt
-        self.duration = duration ?? kind.defaultDuration
+        // A reset past 2100 or a window longer than a year is a garbled response, and would overflow minute math later.
+        let plausibleReset = resetsAt.flatMap { (0 ..< Self.latestReset).contains($0.timeIntervalSince1970) ? $0 : nil }
+        self.resetsAt = plausibleReset
+        self.duration = duration.flatMap { (1 ... Self.longestDuration).contains($0) ? $0 : nil }
+            ?? Self.defaultDuration(kind, resetsAt: plausibleReset)
+    }
+
+    /// 2100-01-01T00:00:00Z.
+    private static let latestReset: TimeInterval = 4_102_444_800
+    private static let longestDuration: TimeInterval = 366 * 24 * 3600
+
+    /// A monthly window spans the calendar month before its reset, so February isn't measured as 30 days.
+    private static func defaultDuration(_ kind: Kind, resetsAt: Date?) -> TimeInterval {
+        guard kind == .monthly, let resetsAt else { return kind.defaultDuration }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        guard let start = calendar.date(byAdding: .month, value: -1, to: resetsAt) else { return kind.defaultDuration }
+        return resetsAt.timeIntervalSince(start)
     }
 
     public var leftPercent: Double { 100 - usedPercent }
@@ -171,6 +187,8 @@ public enum UsageLimits {
     /// minutes, and two accounts practically never do. Sub-second parts of a reset time vary per call.
     static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
         guard a.provider == b.provider, a.error == nil, b.error == nil, !a.windows.isEmpty else { return false }
+        // Windows with no use and no reset yet look alike on every account, so they prove nothing.
+        guard a.windows.contains(where: { $0.usedPercent > 0 || $0.resetsAt != nil }) else { return false }
         func key(_ window: UsageWindow) -> (String, Double, Int?) {
             (window.id, window.usedPercent, window.resetsAt.map { Int(($0.timeIntervalSince1970 / 60).rounded()) })
         }

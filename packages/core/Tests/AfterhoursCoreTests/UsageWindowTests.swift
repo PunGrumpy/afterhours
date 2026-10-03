@@ -46,3 +46,37 @@ private func window(used: Double, resetsIn: TimeInterval?, now: Date) -> UsageWi
     #expect(UsageWindow.Kind.weekly < .monthly)
     #expect(UsageWindow.Kind.weekly.defaultDuration == 7 * 24 * 3600)
 }
+
+private func utc(_ text: String) throws -> Date { try #require(UsageLimits.parseISO8601(text)) }
+
+private func monthly(used: Double, resetsAt: Date?) -> UsageWindow {
+    UsageWindow(id: "chat", kind: .monthly, label: "Chat", usedPercent: used, resetsAt: resetsAt)
+}
+
+@Test func monthlyWindowsSpanTheCalendarMonthBeforeTheirReset() throws {
+    let day: TimeInterval = 24 * 3600
+    let march = try utc("2027-03-01T00:00:00Z")
+    let november = try utc("2026-11-01T00:00:00Z")
+    #expect(monthly(used: 10, resetsAt: march).duration == 28 * day)
+    #expect(monthly(used: 10, resetsAt: november).duration == 31 * day)
+    #expect(monthly(used: 10, resetsAt: nil).duration == 30 * day)
+    #expect(UsageWindow(id: "s", kind: .session, label: "Session", usedPercent: 10, resetsAt: march).duration == fiveHours)
+}
+
+@Test func aFebruaryWindowThreeDaysInIsOnPaceToNearlyRunOut() throws {
+    let window = monthly(used: 10, resetsAt: try utc("2027-03-01T00:00:00Z"))
+    let pace = try #require(window.pace(now: try utc("2027-02-04T00:00:00Z")))
+    #expect(abs(pace.elapsed - 3.0 / 28) < 0.0001)
+    #expect(abs(pace.projectedLeft - (100 - 10 * 28.0 / 3)) < 0.01)
+}
+
+@Test func implausibleResetsAndLengthsAreDropped() {
+    let garbled = UsageWindow(id: "primary", kind: .session, label: "Session", usedPercent: 10,
+                              resetsAt: Date(timeIntervalSince1970: 1e21), duration: 1e300)
+    #expect(garbled.resetsAt == nil)
+    #expect(garbled.duration == fiveHours)
+    #expect(UsageWindow(id: "w", kind: .weekly, label: "Weekly", usedPercent: 10, resetsAt: nil, duration: -60).duration
+            == 7 * 24 * 3600)
+    #expect(UsageWindow(id: "n", kind: .session, label: "Session", usedPercent: 10, resetsAt: nil, duration: .nan).duration
+            == fiveHours)
+}
