@@ -53,6 +53,8 @@ final class AppModel {
     @ObservationIgnored private let stuckAfter: TimeInterval = 15 * 60
     /// Agents without hooks count as working for this long after their last CPU activity.
     @ObservationIgnored private let activeWindow: TimeInterval = 45
+    /// Kept as one value, so a later pmset success clears this message and no other.
+    private static let pmsetFailure = "Couldn't run pmset. Reinstall lid-closed mode in Settings."
 
     @ObservationIgnored private let assertion = SleepAssertion()
     @ObservationIgnored private var tracker = ActivityTracker()
@@ -77,8 +79,9 @@ final class AppModel {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.releaseAll() }
         }
-        // `kill`, `pkill`, and updaters skip willTerminate; without this, `disablesleep 1` outlives the app.
-        for signalNumber in [SIGTERM, SIGINT] {
+        // `kill`, `pkill`, a closed terminal, and updaters skip willTerminate; without this, `disablesleep 1`
+        // outlives the app.
+        for signalNumber in [SIGTERM, SIGINT, SIGHUP] {
             signal(signalNumber, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler { [weak self] in
@@ -256,9 +259,9 @@ final class AppModel {
         if wantLid != sleepDisabledByUs {
             if LidControl.setSleepDisabled(wantLid) {
                 sleepDisabledByUs = wantLid
-                lastError = nil
+                if lastError == Self.pmsetFailure { lastError = nil }
             } else {
-                lastError = "Couldn't run pmset. Reinstall lid-closed mode in Settings."
+                lastError = Self.pmsetFailure
                 lidControlInstalled = LidControl.isInstalled
             }
         }

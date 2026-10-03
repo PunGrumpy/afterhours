@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct AfterhoursApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     /// `Afterhours --snapshot out.png [expanded]` renders the menu with sample data and exits, so the
@@ -16,6 +16,8 @@ struct AfterhoursApp: App {
         if let index = arguments.firstIndex(of: "--snapshot-settings"), arguments.count > index + 1 {
             Self.snapshotSettings(to: arguments[index + 1], page: arguments.dropFirst(index + 2).first ?? "general")
         }
+        // Built only for a real run, because its init changes power settings and replaces the installed hook.
+        _model = State(initialValue: AppModel())
     }
 
     private static func previewModel(expanded: Bool) -> AppModel {
