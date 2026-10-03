@@ -11,21 +11,26 @@ export const metadata: Metadata = {
 
 const checks = [
   {
-    login: "Keychain login, one per ~/.claude* directory",
+    login:
+      "Keychain login, one per ~/.claude* directory, or its .credentials.json",
     provider: "Claude Code",
     to: "api.anthropic.com",
   },
-  { login: "~/.codex/auth.json", provider: "Codex", to: "chatgpt.com" },
+  {
+    login: "~/.codex/auth.json",
+    provider: "Codex",
+    to: "chatgpt.com, identified as Codex",
+  },
   { login: "OpenCode's auth.json", provider: "OpenCode Go", to: "opencode.ai" },
   {
-    login: "~/.config/github-copilot/apps.json or the gh login",
+    login: "~/.config/github-copilot/apps.json or hosts.json, or the gh login",
     provider: "Copilot",
     to: "api.github.com, identified as Copilot Chat",
   },
   {
     login: "The Cursor app's state store or ~/.cursor/auth.json",
     provider: "Cursor",
-    to: "api2.cursor.sh",
+    to: "api2.cursor.sh, identified as the Cursor CLI",
   },
   {
     login: "~/.grok/auth.json",
@@ -40,7 +45,7 @@ const checks = [
 ];
 
 const Page = () => (
-  <LegalPage title="Privacy Policy" updated="September 27, 2026">
+  <LegalPage title="Privacy Policy" updated="October 3, 2026">
     <p>
       Afterhours is a menu bar app that runs on your Mac. It has no accounts and
       no servers, and it has no telemetry, analytics, crash reporting, or ads.
@@ -51,8 +56,13 @@ const Page = () => (
       <p>
         To tell when agents are working, Afterhours reads the names, command
         lines, and CPU time of the processes on your Mac. It uses them in memory
-        and never saves or sends them. It never reads your code, your files, or
-        your terminal output.
+        and never saves or sends them. It never opens your project files.
+      </p>
+      <p>
+        When you install Claude Code hooks, Claude Code sends the hook each
+        event, which can include your prompt and a tool&apos;s input and output,
+        such as a file it read or a command&apos;s output. The hook keeps only
+        the fields listed below and never saves or sends the rest.
       </p>
       <p>It keeps these on your Mac:</p>
       <ul>
@@ -64,14 +74,20 @@ const Page = () => (
           exits.
         </li>
         <li>
+          The <code>afterhours-hook</code> program in{" "}
+          <code>~/Library/Application Support/Afterhours/bin</code>, which the
+          hooks run.
+        </li>
+        <li>
           Your settings, in the <code>app.afterhours.local</code> preferences.
         </li>
         <li>
           The management key of any CLIProxyAPI hub you add, in your Keychain.
         </li>
         <li>
-          When you install Claude Code hooks, a copy of your previous{" "}
-          <code>settings.json</code> as{" "}
+          When you install Claude Code hooks in a config directory, an
+          Afterhours entry for each hook event in its <code>settings.json</code>
+          , and a copy of your previous <code>settings.json</code> as{" "}
           <code>settings.json.afterhours-backup</code>.
         </li>
         <li>
