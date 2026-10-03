@@ -63,6 +63,7 @@ final class AppModel {
     @ObservationIgnored private var warnedLowBattery = false
     @ObservationIgnored private var hotKey: HotKey?
     @ObservationIgnored private var terminationSignals: [DispatchSourceSignal] = []
+    @ObservationIgnored private var sleepGuard: Process?
 
     init() {
         prefs = Preferences()
@@ -256,10 +257,12 @@ final class AppModel {
         }
 
         let wantLid = next.isHolding && prefs.lidClosedMode && lidControlInstalled
-        if wantLid != sleepDisabledByUs {
+        // Something else can turn it off under a hold, such as the guard of an Afterhours that quit a moment ago.
+        if wantLid != sleepDisabledByUs || (wantLid && !Power.sleepDisabled) {
             if LidControl.setSleepDisabled(wantLid) {
                 sleepDisabledByUs = wantLid
                 if lastError == Self.pmsetFailure { lastError = nil }
+                if wantLid { startSleepGuard() }
             } else {
                 lastError = Self.pmsetFailure
                 lidControlInstalled = LidControl.isInstalled
@@ -281,6 +284,18 @@ final class AppModel {
     private func releaseAll() {
         assertion.release()
         if sleepDisabledByUs { LidControl.setSleepDisabled(false) }
+    }
+
+    /// A crash or Force Quit skips `releaseAll()`, so a helper outside this process turns `disablesleep` off after it.
+    private func startSleepGuard() {
+        guard sleepGuard?.isRunning != true,
+              let hook = Bundle.main.url(forAuxiliaryExecutable: "afterhours-hook") else { return }
+        let process = Process()
+        process.executableURL = hook
+        process.arguments = ["--guard", String(getpid())]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        if (try? process.run()) != nil { sleepGuard = process }
     }
 
     // MARK: - Sessions
