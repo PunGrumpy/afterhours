@@ -187,6 +187,8 @@ public enum UsageLimits {
     /// minutes, and two accounts practically never do. Sub-second parts of a reset time vary per call.
     static func sameAccount(_ a: UsageAccount, _ b: UsageAccount) -> Bool {
         guard a.provider == b.provider, a.error == nil, b.error == nil, !a.windows.isEmpty else { return false }
+        // Windows with no use and no reset yet look alike on every account, so they prove nothing.
+        guard a.windows.contains(where: { $0.usedPercent > 0 || $0.resetsAt != nil }) else { return false }
         func key(_ window: UsageWindow) -> (String, Double, Int?) {
             (window.id, window.usedPercent, window.resetsAt.map { Int(($0.timeIntervalSince1970 / 60).rounded()) })
         }
