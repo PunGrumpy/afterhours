@@ -15,7 +15,7 @@ final class Preferences {
     /// Always finite, so a forgotten session can't drain the battery.
     var batteryWaitMinutes: Int { didSet { save(batteryWaitMinutes, "batteryWaitMinutes") } }
 
-    static let untilSessionsClose = -1
+    static let untilSessionsClose = HoldPolicy.untilSessionsClose
     var turnDisplayOff: Bool { didSet { save(turnDisplayOff, "turnDisplayOff") } }
     var notifications: Bool { didSet { save(notifications, "notifications") } }
     /// Off hides the icon; opening the app again from Finder or Spotlight shows Settings instead.

@@ -17,22 +17,6 @@ struct AgentSession {
     let state: AgentState
 }
 
-enum HoldReason: Equatable {
-    case working
-    /// A nil `until` waits until every session closes.
-    case waitingForYou(until: Date?)
-}
-
-enum HoldState: Equatable {
-    case disabled
-    case paused(until: Date)
-    case holding
-    case blocked(String)  // agents are working, but a safety rule says no
-    case idle
-
-    var isHolding: Bool { self == .holding }
-}
-
 @Observable
 final class AppModel {
     let prefs: Preferences
@@ -208,23 +192,14 @@ final class AppModel {
         sessions = collectSessions(now: now)
 
         let working = sessions.contains { $0.state == .working }
-        if working { lastWorkingAt = now }
-        if sessions.isEmpty { lastWorkingAt = nil }
-        let reason: HoldReason? = working ? .working : waitForYou(now: now)
+        lastWorkingAt = HoldPolicy.lastWorkingAt(previous: lastWorkingAt, working: working,
+                                                 hasSessions: !sessions.isEmpty, now: now)
+        let reason = HoldPolicy.reason(working: working, hasSessions: !sessions.isEmpty, lastWorkingAt: lastWorkingAt,
+                                       onAC: battery.onAC, pluggedInWaitMinutes: prefs.pluggedInWaitMinutes,
+                                       batteryWaitMinutes: prefs.batteryWaitMinutes, now: now)
         if let reason { holdReason = reason }
 
-        let next: HoldState
-        if !prefs.enabled {
-            next = .disabled
-        } else if let until = pausedUntil {
-            next = .paused(until: until)
-        } else if reason == nil {
-            next = .idle
-        } else if let reason = blocker() {
-            next = .blocked(reason)
-        } else {
-            next = .holding
-        }
+        let next = HoldPolicy.state(enabled: prefs.enabled, pausedUntil: pausedUntil, reason: reason, blocker: blocker())
         apply(next)
         warnIfBatteryLow(next)
         // The quota matters while agents burn it; otherwise opening the menu refreshes on demand.
@@ -248,24 +223,11 @@ final class AppModel {
                  body: "Afterhours lets your Mac sleep at \(prefs.batteryThreshold)%. It's at \(percent)% now.")
     }
 
-    /// The wait limit counts from when an agent last worked.
-    private func waitForYou(now: Date) -> HoldReason? {
-        guard let last = lastWorkingAt, !sessions.isEmpty else { return nil }
-        let minutes = battery.onAC ? prefs.pluggedInWaitMinutes : prefs.batteryWaitMinutes
-        if minutes == Preferences.untilSessionsClose { return .waitingForYou(until: nil) }
-        let until = last.addingTimeInterval(TimeInterval(minutes * 60))
-        return until > now ? .waitingForYou(until: until) : nil
-    }
-
     private func blocker() -> String? {
-        if ProcessInfo.processInfo.thermalState == .critical { return "Your Mac is too hot" }
-        if prefs.respectLowPowerMode, Power.lowPowerMode { return "Low Power Mode is on" }
-        guard !battery.onAC else { return nil }
-        if prefs.onlyWhenPluggedIn { return "Your Mac isn't plugged in" }
-        if let percent = battery.percent, prefs.batteryThreshold > 0, percent < prefs.batteryThreshold {
-            return "Battery is below \(prefs.batteryThreshold)%"
-        }
-        return nil
+        HoldPolicy.blocker(thermalCritical: ProcessInfo.processInfo.thermalState == .critical,
+                           lowPowerMode: Power.lowPowerMode, respectLowPowerMode: prefs.respectLowPowerMode,
+                           onAC: battery.onAC, onlyWhenPluggedIn: prefs.onlyWhenPluggedIn,
+                           batteryPercent: battery.percent, batteryThreshold: prefs.batteryThreshold)
     }
 
     private func apply(_ next: HoldState) {
