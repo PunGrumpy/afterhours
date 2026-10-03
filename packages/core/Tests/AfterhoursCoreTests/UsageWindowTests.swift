@@ -69,3 +69,14 @@ private func monthly(used: Double, resetsAt: Date?) -> UsageWindow {
     #expect(abs(pace.elapsed - 3.0 / 28) < 0.0001)
     #expect(abs(pace.projectedLeft - (100 - 10 * 28.0 / 3)) < 0.01)
 }
+
+@Test func implausibleResetsAndLengthsAreDropped() {
+    let garbled = UsageWindow(id: "primary", kind: .session, label: "Session", usedPercent: 10,
+                              resetsAt: Date(timeIntervalSince1970: 1e21), duration: 1e300)
+    #expect(garbled.resetsAt == nil)
+    #expect(garbled.duration == fiveHours)
+    #expect(UsageWindow(id: "w", kind: .weekly, label: "Weekly", usedPercent: 10, resetsAt: nil, duration: -60).duration
+            == 7 * 24 * 3600)
+    #expect(UsageWindow(id: "n", kind: .session, label: "Session", usedPercent: 10, resetsAt: nil, duration: .nan).duration
+            == fiveHours)
+}

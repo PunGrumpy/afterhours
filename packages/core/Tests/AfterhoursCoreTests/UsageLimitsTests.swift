@@ -167,3 +167,14 @@ private func claude(_ location: String, used: Double, resetsAt: Date?) -> UsageA
                       into: &accounts)
     #expect(accounts.count == 2)
 }
+
+@Test func garbledCodexResetTimesNeitherCrashNorSurvive() {
+    let body = Data(#"{"rate_limit": {"primary_window": {"used_percent": 10, "limit_window_seconds": 1e300, "reset_at": 1e21}}}"#.utf8)
+    let local = UsageLimits.codexAccount(.success(body), fallbackPlan: nil, locations: ["~/.codex"], source: nil)
+    let hubbed = UsageLimits.codexAccount(.success(body), fallbackPlan: nil, locations: ["a@b.c"], source: "Hub")
+    #expect(local.windows.first?.resetsAt == nil)
+    var accounts: [UsageAccount] = []
+    UsageLimits.merge(local, into: &accounts)
+    UsageLimits.merge(hubbed, into: &accounts)
+    #expect(accounts.count == 1)
+}

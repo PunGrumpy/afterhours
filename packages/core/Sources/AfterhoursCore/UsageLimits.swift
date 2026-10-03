@@ -24,9 +24,16 @@ public struct UsageWindow: Sendable, Identifiable, Equatable {
         self.kind = kind
         self.label = label
         self.usedPercent = min(100, max(0, usedPercent.isFinite ? usedPercent : 0))
-        self.resetsAt = resetsAt
-        self.duration = duration ?? Self.defaultDuration(kind, resetsAt: resetsAt)
+        // A reset past 2100 or a window longer than a year is a garbled response, and would overflow minute math later.
+        let plausibleReset = resetsAt.flatMap { (0 ..< Self.latestReset).contains($0.timeIntervalSince1970) ? $0 : nil }
+        self.resetsAt = plausibleReset
+        self.duration = duration.flatMap { (1 ... Self.longestDuration).contains($0) ? $0 : nil }
+            ?? Self.defaultDuration(kind, resetsAt: plausibleReset)
     }
+
+    /// 2100-01-01T00:00:00Z.
+    private static let latestReset: TimeInterval = 4_102_444_800
+    private static let longestDuration: TimeInterval = 366 * 24 * 3600
 
     /// A monthly window spans the calendar month before its reset, so February isn't measured as 30 days.
     private static func defaultDuration(_ kind: Kind, resetsAt: Date?) -> TimeInterval {
