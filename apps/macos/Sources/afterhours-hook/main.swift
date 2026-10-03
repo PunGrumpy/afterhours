@@ -3,8 +3,14 @@ import AfterhoursCore
 
 // afterhours-hook <agent>  reads a Claude Code hook payload on stdin
 // afterhours-hook <agent> --state working|waiting|idle|end [--session <id>]
+// afterhours-hook --guard <pid>  waits for Afterhours to exit, then turns pmset disablesleep back off
 //
 // Always exits 0 and prints nothing, so a failure never breaks the agent.
+
+if CommandLine.arguments.dropFirst().first == "--guard" {
+    guard let pid = CommandLine.arguments.dropFirst(2).first.flatMap({ Int32($0) }), pid > 1 else { exit(0) }
+    runGuard(watching: pid)
+}
 
 let args = CommandLine.arguments.dropFirst()
 let agent = args.first ?? "agent"

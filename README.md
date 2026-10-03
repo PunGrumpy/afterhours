@@ -98,7 +98,7 @@ Afterhours lets your Mac sleep, even while agents work, when:
 - Low Power Mode is on and **Respect Low Power Mode** is on
 - macOS reports a critical thermal state
 
-If the lid is closed at that moment, Afterhours runs `pmset sleepnow`. On launch, it turns `disablesleep` off in case a previous run crashed while keeping the Mac awake.
+If the lid is closed at that moment, Afterhours runs `pmset sleepnow`. While lid-closed mode is in use, a small helper turns `disablesleep` back off as soon as Afterhours quits, even after a crash or Force Quit. On launch, Afterhours also turns it off in case a previous run left it on.
 
 Claude Code doesn't fire a `Stop` hook when you interrupt it with Esc, so a session that reports working with no CPU activity for 15 minutes counts as idle.
 
