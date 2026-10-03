@@ -75,16 +75,32 @@ public enum ClaudeHookSettings {
     }
 
     static func isOurs(_ group: [String: Any]) -> Bool {
-        (group["hooks"] as? [[String: Any]] ?? []).contains { ($0["command"] as? String)?.contains(marker) == true }
+        (group["hooks"] as? [[String: Any]] ?? []).contains(where: isOurCommand)
     }
 
+    static func isOurCommand(_ hook: [String: Any]) -> Bool {
+        (hook["command"] as? String)?.contains(marker) == true
+    }
+
+    /// Takes out only our commands; a group someone else also uses keeps the rest of its commands.
     static func stripOurs(_ hooks: [String: Any]) -> [String: Any] {
         var result = hooks
         for (event, value) in hooks {
             guard let groups = value as? [[String: Any]] else { continue }
-            let kept = groups.filter { !isOurs($0) }
+            let kept = groups.compactMap(withoutOurCommands)
             result[event] = kept.isEmpty ? nil : kept
         }
         return result
+    }
+
+    /// The group minus our commands, or nil when nothing else was in it.
+    static func withoutOurCommands(_ group: [String: Any]) -> [String: Any]? {
+        guard let hooks = group["hooks"] as? [[String: Any]] else { return group }
+        let others = hooks.filter { !isOurCommand($0) }
+        if others.count == hooks.count { return group }
+        if others.isEmpty { return nil }
+        var kept = group
+        kept["hooks"] = others
+        return kept
     }
 }
