@@ -20,7 +20,7 @@ struct SettingsView: View {
     /// Every tab reports its own height, so the window fits the tab you're on.
     var body: some View {
         TabView(selection: $tab) {
-            GeneralTab(prefs: prefs)
+            GeneralTab(model: model, prefs: prefs)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(Tab.general)
             PowerTab(model: model, prefs: prefs)
@@ -52,6 +52,7 @@ private struct SettingsPage<Content: View>: View {
 // MARK: - General
 
 private struct GeneralTab: View {
+    let model: AppModel
     @Bindable var prefs: Preferences
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var error: String?
@@ -70,14 +71,15 @@ private struct GeneralTab: View {
                         }
                     }
                 SettingsToggle(title: "Show in menu bar", isOn: $prefs.showInMenuBar)
-                SettingsRow("Turn Afterhours on or off") {
-                    Text("⌥⌘L").foregroundStyle(.secondary)
-                }
+                SettingsToggle(title: "Turn Afterhours on or off with ⌥⌘L", isOn: $prefs.hotKeyEnabled)
             } footer: {
                 if let error {
                     Text(error).foregroundStyle(.red)
                 } else if !prefs.showInMenuBar {
                     Text("Open Afterhours again from Applications or Spotlight to get back here.")
+                }
+                if prefs.hotKeyEnabled && model.hotKeyTaken {
+                    Text("Another app already uses ⌥⌘L, so the shortcut does nothing here.")
                 }
             }
 

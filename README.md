@@ -54,7 +54,7 @@ Any tool with hooks or plugins can report its own state. Afterhours installs the
 
 ### 4. Launch at login
 
-Turn on **Settings… > General > Launch at login**. Press `⌥⌘L` anywhere to turn Afterhours on or off.
+Turn on **Settings… > General > Launch at login**. Press `⌥⌘L` anywhere to turn Afterhours on or off, or turn that shortcut off in **Settings… > General** if another app needs it.
 
 ## Waiting for your reply
 

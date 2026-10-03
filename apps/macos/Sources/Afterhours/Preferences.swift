@@ -20,6 +20,8 @@ final class Preferences {
     var notifications: Bool { didSet { save(notifications, "notifications") } }
     /// Off hides the icon; opening the app again from Finder or Spotlight shows Settings instead.
     var showInMenuBar: Bool { didSet { save(showInMenuBar, "showInMenuBar") } }
+    /// Off frees ⌥⌘L for other apps, like Reformat Code in JetBrains IDEs.
+    var hotKeyEnabled: Bool { didSet { save(hotKeyEnabled, "hotKeyEnabled") } }
     /// Shows Claude Code and Codex subscription quotas in the menu.
     var usageLimits: Bool { didSet { save(usageLimits, "usageLimits") } }
     var limitsExpanded: Bool { didSet { save(limitsExpanded, "limitsExpanded") } }
@@ -48,6 +50,7 @@ final class Preferences {
             "turnDisplayOff": false,
             "notifications": true,
             "showInMenuBar": true,
+            "hotKeyEnabled": true,
             "usageLimits": true,
             "limitsExpanded": false,
             "sound": "Glass",
@@ -62,6 +65,7 @@ final class Preferences {
         turnDisplayOff = defaults.bool(forKey: "turnDisplayOff")
         notifications = defaults.bool(forKey: "notifications")
         showInMenuBar = defaults.bool(forKey: "showInMenuBar")
+        hotKeyEnabled = defaults.bool(forKey: "hotKeyEnabled")
         usageLimits = defaults.bool(forKey: "usageLimits")
         limitsExpanded = defaults.bool(forKey: "limitsExpanded")
         hubs = defaults.data(forKey: "usageHubs").flatMap { try? JSONDecoder().decode([UsageHub].self, from: $0) } ?? []

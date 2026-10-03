@@ -48,6 +48,8 @@ final class AppModel {
     private(set) var installedAgents: Set<String> = []
     private(set) var pausedUntil: Date?
     private(set) var lastError: String?
+    /// True when the shortcut is on in Settings but couldn't be registered.
+    private(set) var hotKeyTaken = false
 
     /// Interrupting Claude Code with Esc fires no Stop hook, so a silent "working" session is stuck.
     @ObservationIgnored private let stuckAfter: TimeInterval = 15 * 60
@@ -72,8 +74,11 @@ final class AppModel {
             lastError = "Couldn't install afterhours-hook: \(error.localizedDescription)"
         }
 
-        prefs.onChange = { [weak self] in self?.tick() }
-        hotKey = HotKey.toggle { [weak self] in self?.toggleEnabled() }
+        prefs.onChange = { [weak self] in
+            self?.syncHotKey()
+            self?.tick()
+        }
+        syncHotKey()
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -148,7 +153,25 @@ final class AppModel {
 
     // MARK: - Actions
 
-    func toggleEnabled() { prefs.enabled.toggle() }
+    /// The mug looks the same off and idle, so a press that doesn't start or end a hold says what it did.
+    func toggleEnabled() {
+        let wasHolding = state.isHolding
+        prefs.enabled.toggle()
+        guard state.isHolding == wasHolding else { return }
+        announce(prefs.enabled ? "Afterhours is on" : "Afterhours is off",
+                 body: "You pressed ⌥⌘L. If another app needs that shortcut, turn it off in Settings > General.")
+    }
+
+    /// Registers ⌥⌘L only while the setting is on, so turning it off frees the keys at once.
+    private func syncHotKey() {
+        guard prefs.hotKeyEnabled != (hotKey != nil) else { return }
+        hotKey?.unregister()
+        hotKey = nil
+        hotKeyTaken = false
+        guard prefs.hotKeyEnabled else { return }
+        hotKey = HotKey.toggle { [weak self] in self?.toggleEnabled() }
+        hotKeyTaken = hotKey == nil
+    }
 
     func pause(minutes: Int) {
         pausedUntil = Date().addingTimeInterval(TimeInterval(minutes * 60))
