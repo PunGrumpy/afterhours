@@ -150,7 +150,14 @@ final class AppModel {
 
     // MARK: - Actions
 
-    func toggleEnabled() { prefs.enabled.toggle() }
+    /// The mug looks the same off and idle, so a press that doesn't start or end a hold says what it did.
+    func toggleEnabled() {
+        let wasHolding = state.isHolding
+        prefs.enabled.toggle()
+        guard state.isHolding == wasHolding else { return }
+        announce(prefs.enabled ? "Afterhours is on" : "Afterhours is off",
+                 body: "You pressed ⌥⌘L. If another app needs that shortcut, turn it off in Settings > General.")
+    }
 
     /// Registers ⌥⌘L only while the setting is on, so turning it off frees the keys at once.
     private func syncHotKey() {
