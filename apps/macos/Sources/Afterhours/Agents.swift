@@ -148,9 +148,10 @@ struct ActivityTracker {
             for member in tree(pid, children: children) {
                 guard let cpu = Proc.cpuNanos(member) else { continue }
                 nextCPU[member] = cpu
-                // A pid we haven't seen was spawned since the last scan, so all of its CPU is new.
-                let before = cpuByPid[member] ?? 0
-                if cpu > before { busyNanos += cpu - before }
+                let previous = cpuByPid[member]
+                busyNanos += Proc.cpuSinceLastScan(current: cpu, previous: previous,
+                                                   startedAt: previous == nil ? Proc.startTime(member) : nil,
+                                                   lastScan: lastScan)
             }
             if elapsed > 0, Double(busyNanos) / 1e9 / elapsed >= cpuThreshold {
                 lastActive[pid] = now
