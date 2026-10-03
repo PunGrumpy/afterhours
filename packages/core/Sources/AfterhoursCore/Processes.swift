@@ -47,6 +47,21 @@ public enum Proc {
         return ticks * UInt64(timebase.numer) / UInt64(timebase.denom)
     }
 
+    /// When the process started, or nil if it's gone.
+    public static func startTime(_ pid: Int32) -> Date? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec) + TimeInterval(info.pbi_start_tvusec) / 1_000_000)
+    }
+
+    /// CPU used since the last scan; a process that ran before that scan without a sample only sets its baseline.
+    public static func cpuSinceLastScan(current: UInt64, previous: UInt64?, startedAt: Date?, lastScan: Date?) -> UInt64 {
+        if let previous { return current > previous ? current - previous : 0 }
+        guard let lastScan, let startedAt, startedAt >= lastScan else { return 0 }
+        return current
+    }
+
     /// argv of a process (requires same user; fails silently otherwise).
     public static func arguments(_ pid: Int32) -> [String] {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
