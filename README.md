@@ -78,7 +78,7 @@ The menu shows how much of each subscription's rate-limit windows is left and wh
 
 Afterhours never stores or refreshes a login. If one expires, run that tool once. Turn it off in **Settings… > Limits**.
 
-If you pool accounts on a [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) hub, add it under **Settings… > Limits > Usage providers** with its URL and management key. Its accounts join the menu, pooled per provider like T3 Code's Limits page: one bar per window with a segment per account. The key is kept in your Keychain, and Afterhours only reads through the hub.
+If you pool accounts on a [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) hub, add it under **Settings… > Limits > Usage providers** with its URL and management key. Its accounts join the menu, pooled per provider like T3 Code's Limits page: one bar per window with a segment per account. The key is kept in your Keychain, and Afterhours only reads through the hub. Use an `https` URL unless the hub runs on this Mac or your local network, because every request carries the key.
 
 ## Reading the menu bar
 
