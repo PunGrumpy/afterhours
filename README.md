@@ -69,10 +69,10 @@ Change both in **Settings… > Power**.
 
 The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
 
-- **Claude Code**: the Keychain login, one per `~/.claude*` config directory
+- **Claude Code**: the Keychain login, one per `~/.claude*` config directory, or that directory's `.credentials.json`
 - **Codex**: `~/.codex/auth.json`
 - **Cursor**: the Cursor app's state store, or `~/.cursor/auth.json`
-- **Copilot**: `~/.config/github-copilot/apps.json` or the `gh` login
+- **Copilot**: `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login
 - **OpenCode Go**: `~/.local/share/opencode/auth.json`
 - **Grok Build**: `~/.grok/auth.json`
 
@@ -104,23 +104,23 @@ Claude Code doesn't fire a `Stop` hook when you interrupt it with Esc, so a sess
 
 ## Privacy
 
-Afterhours has no telemetry, analytics, crash reporting, or update checks. It reads process names and command lines to spot agents, and never reads your code or terminal output.
+Afterhours has no telemetry, analytics, crash reporting, or update checks. It reads process names and command lines to spot agents, and never opens your project files.
 
 The only network requests are the subscription checks described above. They run only while **Settings… > Limits > Show subscription limits in the menu** is on, which is the default. Each request sends a login your tool already stores on your Mac to that tool's own vendor. It reads, never writes, and runs when you open the menu and every 5 minutes while agents work:
 
 | Provider | Login it reads | Where it's sent |
 | --- | --- | --- |
-| Claude Code | Keychain login, one per `~/.claude*` directory | `api.anthropic.com` |
-| Codex | `~/.codex/auth.json` | `chatgpt.com` |
+| Claude Code | Keychain login, one per `~/.claude*` directory, or its `.credentials.json` | `api.anthropic.com` |
+| Codex | `~/.codex/auth.json` | `chatgpt.com`, presented as Codex |
 | OpenCode Go | OpenCode's `auth.json` | `opencode.ai` |
-| Copilot | `~/.config/github-copilot/apps.json` or the `gh` login | `api.github.com`, presented as Copilot Chat |
-| Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh` |
+| Copilot | `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login | `api.github.com`, presented as Copilot Chat |
+| Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh`, presented as Cursor's CLI |
 | Grok Build | `~/.grok/auth.json` | `cli-chat-proxy.grok.com` |
 | CLIProxyAPI hubs you add | the management key you enter | the hub's URL |
 
 Afterhours never stores, refreshes, or forwards a login anywhere else. Turn the setting off, and no request goes out at all.
 
-The hook receives each event Claude Code sends and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
+The hook receives each event Claude Code sends, which can include your prompt and a tool's input and output, and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
 
 - Session ID and agent name
 - State: working, waiting, or idle
