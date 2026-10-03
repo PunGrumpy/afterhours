@@ -119,3 +119,53 @@ private let existing = """
     let written = try String(contentsOf: target, encoding: .utf8)
     #expect(written.contains(ClaudeHookSettings.marker))
 }
+
+// MARK: - Groups shared with your own commands
+
+private let shared = """
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [
+        {"type": "command", "command": "'/Users/me/Library/Application Support/Afterhours/bin/afterhours-hook' claude", "timeout": 5},
+        {"type": "command", "command": "echo mine"}
+      ]}
+    ]
+  }
+}
+"""
+
+private func commands(_ groups: [[String: Any]]) -> [String] {
+    groups.flatMap { ($0["hooks"] as? [[String: Any]] ?? []).compactMap { $0["command"] as? String } }
+}
+
+@Test func uninstallKeepsOtherCommandsThatShareOurGroup() throws {
+    let dir = try tempDir()
+    try writeSettings(shared, in: dir)
+    try ClaudeHookSettings.uninstall(in: dir)
+    let hooks = try #require(try readSettings(in: dir)["hooks"] as? [String: Any])
+    let preToolUse = try #require(hooks["PreToolUse"] as? [[String: Any]])
+    #expect(preToolUse.count == 1)
+    #expect(preToolUse[0]["matcher"] as? String == "*")
+    #expect(commands(preToolUse) == ["echo mine"])
+}
+
+@Test func reinstallKeepsOtherCommandsThatShareOurGroup() throws {
+    let dir = try tempDir()
+    try writeSettings(shared, in: dir)
+    try ClaudeHookSettings.install(in: dir, command: command)
+    let hooks = try #require(try readSettings(in: dir)["hooks"] as? [String: Any])
+    let all = commands(try #require(hooks["PreToolUse"] as? [[String: Any]]))
+    #expect(all.filter { $0 == "echo mine" }.count == 1)
+    #expect(all.filter { $0.contains(ClaudeHookSettings.marker) }.count == 1)
+    #expect(ClaudeHookSettings.isInstalled(in: dir))
+}
+
+@Test func groupsWithoutOurCommandsAreLeftExactlyAsTheyWere() {
+    let theirs: [String: Any] = ["matcher": "Bash", "hooks": [["type": "command", "command": "echo hi"]]]
+    let odd: [String: Any] = ["hooks": "not a list"]
+    let result = ClaudeHookSettings.stripOurs(["PreToolUse": [theirs, odd]])
+    let groups = result["PreToolUse"] as? [[String: Any]]
+    #expect(groups?.count == 2)
+    #expect(groups?[1]["hooks"] as? String == "not a list")
+}
