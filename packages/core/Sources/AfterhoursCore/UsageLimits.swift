@@ -450,7 +450,9 @@ public enum UsageLimits {
 
     private static func hubAccounts(url: String, managementKey: String) async -> Result<[HubAuthFile], HubError> {
         guard let endpoint = hubURL(url, path: "auth-files") else {
-            return .failure(HubError(message: "The hub URL isn't valid"))
+            return .failure(HubError(message: needsHTTPS(url)
+                ? "Use https for a hub that isn't on this Mac or your local network"
+                : "The hub URL isn't valid"))
         }
         var request = URLRequest(url: endpoint, timeoutInterval: timeout)
         request.setValue("Bearer \(managementKey)", forHTTPHeaderField: "Authorization")
@@ -499,16 +501,55 @@ public enum UsageLimits {
         }
     }
 
+    /// Every request carries the management key, so plain http is only for a hub on this Mac or the local network.
     static func hubURL(_ base: String, path: String) -> URL? {
-        var text = base.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.contains("://") { text = "https://" + text }
-        guard var components = URLComponents(string: text), let scheme = components.scheme,
-              ["http", "https"].contains(scheme), components.host != nil
+        // App Transport Security already blocks http to a domain name, but not to an IP address like a VPS's.
+        guard var components = hubComponents(base),
+              components.scheme == "https" || isLocalHost(components.host ?? "")
         else { return nil }
         components.path = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
         components.path += "/v0/management/\(path)"
         components.query = nil
         return components.url
+    }
+
+    /// True for an http URL that `hubURL` refuses, so the error can say why.
+    static func needsHTTPS(_ base: String) -> Bool {
+        guard let components = hubComponents(base) else { return false }
+        return components.scheme == "http" && !isLocalHost(components.host ?? "")
+    }
+
+    private static func hubComponents(_ base: String) -> URLComponents? {
+        var text = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.contains("://") { text = "https://" + text }
+        guard let components = URLComponents(string: text), let scheme = components.scheme,
+              ["http", "https"].contains(scheme), components.host?.isEmpty == false
+        else { return nil }
+        return components
+    }
+
+    /// Loopback, private and link-local addresses, `.local` names, and single-label names like `nas`.
+    private static func isLocalHost(_ host: String) -> Bool {
+        let name = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if name == "localhost" || name.hasSuffix(".local") { return true }
+        if name.contains(":") {
+            // Only a full first group means fc00::/7, because "fc::1" is 00fc::1.
+            let first = name.prefix { $0 != ":" }
+            return name == "::1" || name.hasPrefix("fe80:")
+                || (first.count == 4 && (first.hasPrefix("fc") || first.hasPrefix("fd")))
+        }
+        let parts = name.split(separator: ".", omittingEmptySubsequences: false)
+        // Leading zeros and signs are refused, because the network stack may read "010" as octal.
+        let octets = parts.compactMap { part in
+            Int(part).flatMap { String($0) == part && (0...255).contains($0) ? $0 : nil }
+        }
+        guard parts.count == 4, octets.count == 4 else {
+            // A number like 134744072 or 0x08080808 is an IPv4 address to the network stack, not a LAN name.
+            return parts.count == 1 && name.contains(where: \.isLetter) && !name.hasPrefix("0x")
+        }
+        let (a, b) = (octets[0], octets[1])
+        return a == 127 || a == 10 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168)
+            || (a == 169 && b == 254)
     }
 
     // MARK: - Shared

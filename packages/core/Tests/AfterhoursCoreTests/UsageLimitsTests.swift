@@ -23,6 +23,36 @@ import Testing
     #expect(UsageLimits.hubURL("ftp://h", path: "auth-files") == nil)
 }
 
+@Test func hubURLNeedsAHost() {
+    #expect(UsageLimits.hubURL("http://", path: "auth-files") == nil)
+    #expect(UsageLimits.hubURL("https://", path: "auth-files") == nil)
+    #expect(!UsageLimits.needsHTTPS("http://"))
+}
+
+@Test(arguments: ["http://localhost:8317", "http://127.0.0.1:8317", "http://[::1]:8317", "http://192.168.1.20:8317",
+                  "http://10.0.0.5", "http://172.16.0.9", "http://169.254.10.10", "http://nas:8317",
+                  "http://Hub.Local:8317", "http://[fd12::1]:8317"])
+func hubURLAllowsHTTPOnThisMacAndTheLocalNetwork(url: String) {
+    #expect(UsageLimits.hubURL(url, path: "auth-files") != nil)
+    #expect(!UsageLimits.needsHTTPS(url))
+}
+
+@Test(arguments: ["http://203.0.113.5:8317", "http://hub.example.com", "http://172.32.0.1", "http://[2001:db8::1]:8317",
+                  "http://134744072", "http://0x08080808", "http://010.010.010.010", "http://[fc::1]:8317"])
+func hubURLRefusesHTTPBeyondTheLocalNetwork(url: String) {
+    #expect(UsageLimits.hubURL(url, path: "auth-files") == nil)
+    #expect(UsageLimits.needsHTTPS(url))
+    let secure = url.replacingOccurrences(of: "http://", with: "https://")
+    #expect(UsageLimits.hubURL(secure, path: "auth-files") != nil)
+    #expect(!UsageLimits.needsHTTPS(secure))
+}
+
+@Test func aRefusedHubURLIsExplainedWithoutSendingTheKey() async {
+    let result = await UsageLimits.hubAccountCount(url: "http://203.0.113.5:8317", managementKey: "test-key")
+    #expect(result == .failure(UsageLimits.HubError(
+        message: "Use https for a hub that isn't on this Mac or your local network")))
+}
+
 // MARK: - Dates and text
 
 @Test func parseISO8601AcceptsBothFractionalAndWholeSeconds() {
