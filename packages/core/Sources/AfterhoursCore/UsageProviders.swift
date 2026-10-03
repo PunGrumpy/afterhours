@@ -157,26 +157,32 @@ extension UsageLimits {
 
     static let cursorUsageURL = URL(string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage")!
 
+    /// Reads one value from a VS Code-style state store with `-init /dev/null`, so the user's sqliterc can't add headers.
+    static func sqliteValue(database: URL, key: String, environment: [String: String]? = nil) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        let quoted = key.replacingOccurrences(of: "'", with: "''")
+        process.arguments = ["-init", "/dev/null", "-readonly", database.path,
+                             "SELECT value FROM ItemTable WHERE key = '\(quoted)'"]
+        if let environment { process.environment = environment }
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return process.terminationStatus == 0 && !text.isEmpty ? text : nil
+    }
+
     /// The Cursor app keeps its login in a SQLite state store, which `sqlite3` reads without a prompt;
     /// the CLI's file login is the fallback. Its Keychain item would ask permission, so it isn't used.
     private static func cursorLogin() -> (token: String, plan: String?, location: String)? {
         let state = home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb")
         if FileManager.default.fileExists(atPath: state.path) {
-            func value(_ key: String) -> String? {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-                process.arguments = ["-readonly", state.path, "SELECT value FROM ItemTable WHERE key = '\(key)'"]
-                let stdout = Pipe()
-                process.standardOutput = stdout
-                process.standardError = FileHandle.nullDevice
-                guard (try? process.run()) != nil else { return nil }
-                let data = stdout.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-                return process.terminationStatus == 0 && !text.isEmpty ? text : nil
-            }
-            if let token = value("cursorAuth/accessToken") {
-                return (token, value("cursorAuth/stripeMembershipType").map(capitalized), "Cursor app")
+            if let token = sqliteValue(database: state, key: "cursorAuth/accessToken") {
+                return (token, sqliteValue(database: state, key: "cursorAuth/stripeMembershipType").map(capitalized),
+                        "Cursor app")
             }
         }
         let file = home.appendingPathComponent(".cursor/auth.json")
