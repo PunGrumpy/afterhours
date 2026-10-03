@@ -1,5 +1,18 @@
 # @afterhours/macos
 
+## 0.2.4
+
+### Patch Changes
+
+- d4a2d19: Turning on detection for an agent that's already running no longer counts the CPU it used earlier as new work, so it doesn't start a hold and keep your Mac awake for nothing.
+- 9ec8334: You can turn off the ⌥⌘L shortcut in Settings > General, so it stops taking those keys from other apps, like Reformat Code in JetBrains IDEs or Downloads in Finder and Safari. Pressing ⌥⌘L now always tells you whether it turned Afterhours on or off, and Settings tells you when another app already uses the shortcut.
+- bc1815a: Afterhours now sends a hub's management key only over https, or over http to a hub on this Mac or your local network. A hub saved with any other http address shows "Use https for a hub that isn't on this Mac or your local network" instead of sending the key unencrypted.
+- 31b6ea9: Removing or reinstalling the Claude Code hooks no longer deletes your own hook commands when they sit in the same group as Afterhours's. Afterhours now takes out only its own commands.
+- 6772647: Afterhours now checks your subscription limits in the background only while agents work, as its privacy policy says, instead of every 5 minutes for as long as it waits for your reply. Opening the menu still refreshes them.
+- fcb8e1f: Afterhours now cleans up before it exits when the terminal that started it closes, the same way it already did for `kill` and `pkill`, so lid-closed mode doesn't stay on. An error about installing the hook at launch also stays in the menu instead of disappearing the next time a hold starts or ends.
+- bb8977f: If Afterhours crashes or you Force Quit it while it keeps a closed Mac awake on battery, a small helper now turns `pmset disablesleep` back off right away, so your Mac can sleep again instead of staying awake until Afterhours opens. During a hold, Afterhours also turns it back on if something else turned it off.
+- 9752e36: Limits now reads your Cursor login even when your `sqliterc` turns on headers or another output mode. Monthly bars measure the burn rate against the real length of the month, so they show the right color early in February and in 31-day months. Two accounts that haven't been used yet no longer merge into one row. A garbled reset time from a provider or hub can no longer crash Afterhours.
+
 ## 0.2.3
 
 ### Patch Changes
