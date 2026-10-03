@@ -25,7 +25,16 @@ public struct UsageWindow: Sendable, Identifiable, Equatable {
         self.label = label
         self.usedPercent = min(100, max(0, usedPercent.isFinite ? usedPercent : 0))
         self.resetsAt = resetsAt
-        self.duration = duration ?? kind.defaultDuration
+        self.duration = duration ?? Self.defaultDuration(kind, resetsAt: resetsAt)
+    }
+
+    /// A monthly window spans the calendar month before its reset, so February isn't measured as 30 days.
+    private static func defaultDuration(_ kind: Kind, resetsAt: Date?) -> TimeInterval {
+        guard kind == .monthly, let resetsAt else { return kind.defaultDuration }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        guard let start = calendar.date(byAdding: .month, value: -1, to: resetsAt) else { return kind.defaultDuration }
+        return resetsAt.timeIntervalSince(start)
     }
 
     public var leftPercent: Double { 100 - usedPercent }
