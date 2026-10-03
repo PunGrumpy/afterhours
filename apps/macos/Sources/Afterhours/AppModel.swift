@@ -202,7 +202,7 @@ final class AppModel {
         apply(next)
         warnIfBatteryLow(next)
         // The quota matters while agents burn it; otherwise opening the menu refreshes on demand.
-        if next.isHolding || !prefs.usageLimits { refreshUsage() }
+        if (next.isHolding && working) || !prefs.usageLimits { refreshUsage() }
     }
 
     func refreshUsage(minimumAge: TimeInterval = UsageMonitor.interval) {
