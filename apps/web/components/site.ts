@@ -1,13 +1,18 @@
 import app from "../../macos/package.json";
 
+const repo = "https://github.com/PunGrumpy/afterhours";
+const tag = encodeURIComponent(`@afterhours/macos@${app.version}`);
+
 export const site = {
   author: {
     name: "Noppakorn Kaewsalabnil",
     url: "https://www.pungrumpy.com",
   },
   brew: "brew install --cask pungrumpy/tap/afterhours",
-  download: "https://github.com/PunGrumpy/afterhours/releases/latest",
-  repo: "https://github.com/PunGrumpy/afterhours",
+  download: `${repo}/releases/download/${tag}/Afterhours-${app.version}.dmg`,
+  releases: `${repo}/releases`,
+  repo,
+  url: "https://tryafterhours.vercel.app",
   version: app.version,
 };
 

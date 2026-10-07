@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
@@ -6,10 +7,15 @@ import { BrewCommand } from "@/components/brew-command";
 import { DownloadButton, GitHubButton } from "@/components/buttons";
 import { Demo } from "@/components/demo";
 import { Features } from "@/components/features";
+import { InstallNote } from "@/components/install-note";
 import { Mug } from "@/components/mug";
 import { site } from "@/components/site";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const riseDelay = (index: number): CSSProperties => ({
   animationDelay: `${index * 60}ms`,
@@ -60,7 +66,7 @@ const Page = () => (
           style={riseDelay(3)}
         >
           <BrewCommand />
-          <p className="text-ink/45 text-[13px]">For macOS 14 or later</p>
+          <InstallNote />
         </div>
 
         <div className="rise mt-14 w-full" style={riseDelay(4)}>
@@ -104,6 +110,7 @@ const Page = () => (
         <div className="mt-9 flex max-w-full flex-col items-center gap-3">
           <DownloadButton />
           <BrewCommand />
+          <InstallNote />
         </div>
       </section>
     </main>

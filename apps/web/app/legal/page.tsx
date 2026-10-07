@@ -4,6 +4,7 @@ import { LegalPage, LegalSection } from "@/components/legal";
 import { site } from "@/components/site";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/legal" },
   description:
     "Licenses for Afterhours and the fonts and icons it uses, and the trademarks it names.",
   title: "Licenses and Trademarks",

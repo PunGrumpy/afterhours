@@ -7,6 +7,7 @@ import { getReleases, oneLine } from "@/lib/changelog";
 import type { Release } from "@/lib/changelog";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/changelog" },
   description:
     "Every Afterhours release, newest first, with what changed in each one.",
   title: "Changelog",
