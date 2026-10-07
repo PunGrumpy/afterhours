@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
+import { site } from "@/components/site";
+
 import "./globals.css";
 
 const instrument = Instrument_Serif({
@@ -11,8 +13,10 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
+  applicationName: "Afterhours",
   description:
     "A menu bar app that keeps your Mac awake while coding agents work, even with the lid closed. When the last agent finishes, your Mac sleeps again.",
+  metadataBase: new URL(site.url),
   title: {
     default: "Afterhours — Keep your Mac awake for your coding agents",
     template: "%s · Afterhours",

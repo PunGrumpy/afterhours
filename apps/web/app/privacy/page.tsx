@@ -4,6 +4,7 @@ import { LegalPage, LegalSection } from "@/components/legal";
 import { site } from "@/components/site";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/privacy" },
   description:
     "What Afterhours keeps on your Mac, the only requests it sends, and what this website collects.",
   title: "Privacy Policy",
