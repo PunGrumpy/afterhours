@@ -108,7 +108,7 @@ struct MenuView: View, Themed {
         .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
         .background {
             if !snapshot {
-                MenuWindow { if prefs.usageLimits { model.refreshUsage(minimumAge: UsageMonitor.menuInterval) } }
+                MenuWindow { model.menuOpened() }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))

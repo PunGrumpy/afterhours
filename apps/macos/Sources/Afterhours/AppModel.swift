@@ -11,7 +11,7 @@ struct AgentSummary: Identifiable {
     let waiting: Int
 }
 
-struct AgentSession {
+struct AgentSession: Equatable {
     let agentId: String
     let agentName: String
     let state: AgentState
@@ -39,6 +39,10 @@ final class AppModel {
     @ObservationIgnored private let stuckAfter: TimeInterval = 15 * 60
     /// Agents without hooks count as working for this long after their last CPU activity.
     @ObservationIgnored private let activeWindow: TimeInterval = 45
+    /// Between ticks while sessions are open or a hold is on, because CPU samples and wait deadlines need it.
+    @ObservationIgnored private let busyInterval: TimeInterval = 4
+    /// Between ticks with nothing to watch; a hook still wakes the loop at once through the sessions folder.
+    @ObservationIgnored private let quietInterval: TimeInterval = 15
     /// Kept as one value, so a later pmset success clears this message and no other.
     private static let pmsetFailure = "Couldn't run pmset. Reinstall lid-closed mode in Settings."
 
@@ -50,6 +54,10 @@ final class AppModel {
     @ObservationIgnored private var hotKey: HotKey?
     @ObservationIgnored private var terminationSignals: [DispatchSourceSignal] = []
     @ObservationIgnored private var sleepGuard: Process?
+    @ObservationIgnored private var sessionWatcher: DispatchSourceFileSystemObject?
+    @ObservationIgnored private var hookTickPending = false
+    /// Decoded session files by path, so an unchanged file isn't read and decoded again every tick.
+    @ObservationIgnored private var recordCache: [URL: (modified: Date, record: SessionRecord)] = [:]
 
     init() {
         prefs = Preferences()
@@ -86,15 +94,18 @@ final class AppModel {
         }
 
         tick()
+        watchSessions()
+        // The tolerance lets macOS coalesce this wakeup with others instead of waking the CPU just for it.
         Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                let delay = self?.nextTickDelay ?? 4
+                try? await Task.sleep(for: .seconds(delay), tolerance: .seconds(delay / 4))
                 self?.tick()
             }
         }
         Task { [weak self] in
             let installed = await AgentKind.findInstalled()
-            self?.installedAgents = installed
+            if self?.installedAgents != installed { self?.installedAgents = installed }
         }
     }
 
@@ -189,8 +200,11 @@ final class AppModel {
     func tick() {
         let now = Date()
         if let until = pausedUntil, until <= now { pausedUntil = nil }
-        battery = Power.battery()
-        sessions = collectSessions(now: now)
+        // An observed property notifies SwiftUI on every set, even an equal one, so unchanged values aren't written.
+        let freshBattery = Power.battery()
+        if freshBattery != battery { battery = freshBattery }
+        let freshSessions = collectSessions(now: now)
+        if freshSessions != sessions { sessions = freshSessions }
 
         let working = sessions.contains { $0.state == .working }
         lastWorkingAt = HoldPolicy.lastWorkingAt(previous: lastWorkingAt, working: working,
@@ -198,13 +212,50 @@ final class AppModel {
         let reason = HoldPolicy.reason(working: working, hasSessions: !sessions.isEmpty, lastWorkingAt: lastWorkingAt,
                                        onAC: battery.onAC, pluggedInWaitMinutes: prefs.pluggedInWaitMinutes,
                                        batteryWaitMinutes: prefs.batteryWaitMinutes, now: now)
-        if let reason { holdReason = reason }
+        if let reason, reason != holdReason { holdReason = reason }
 
         let next = HoldPolicy.state(enabled: prefs.enabled, pausedUntil: pausedUntil, reason: reason, blocker: blocker())
         apply(next)
         warnIfBatteryLow(next)
         // The quota matters while agents burn it; otherwise opening the menu refreshes on demand.
         if (next.isHolding && working) || !prefs.usageLimits { refreshUsage() }
+    }
+
+    /// Opening the menu shows fresh sessions at once, even between quiet ticks.
+    func menuOpened() {
+        tick()
+        if prefs.usageLimits { refreshUsage(minimumAge: UsageMonitor.menuInterval) }
+    }
+
+    private var nextTickDelay: TimeInterval {
+        var delay = sessions.isEmpty && !state.isHolding ? quietInterval : busyInterval
+        if let pausedUntil { delay = min(delay, max(pausedUntil.timeIntervalSinceNow, 1)) }
+        return delay
+    }
+
+    /// Hooks write session files, so a change in that folder ticks right away instead of on the next timer.
+    private func watchSessions() {
+        try? FileManager.default.createDirectory(at: AfterhoursPaths.sessions, withIntermediateDirectories: true)
+        let fd = open(AfterhoursPaths.sessions.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: .write, queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.scheduleHookTick() }
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        sessionWatcher = source
+    }
+
+    /// A burst of tool calls rewrites the files many times a second, so they share one tick.
+    private func scheduleHookTick() {
+        guard !hookTickPending else { return }
+        hookTickPending = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            self?.hookTickPending = false
+            self?.tick()
+        }
     }
 
     func refreshUsage(minimumAge: TimeInterval = UsageMonitor.interval) {
@@ -233,7 +284,7 @@ final class AppModel {
 
     private func apply(_ next: HoldState) {
         let wasHolding = state.isHolding
-        state = next
+        if next != state { state = next }
 
         if next.isHolding {
             assertion.hold(reason: "Afterhours: coding agents are working", lidClosed: prefs.lidClosedMode)
@@ -332,19 +383,33 @@ final class AppModel {
     /// Reads hook session files, deleting ones whose agent process has exited.
     private func loadHookRecords() -> [SessionRecord] {
         let fm = FileManager.default
-        let files = (try? fm.contentsOfDirectory(at: AfterhoursPaths.sessions, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension == "json" }.compactMap { url in
-            guard let data = try? Data(contentsOf: url),
-                  let record = try? JSONDecoder.afterhours.decode(SessionRecord.self, from: data)
-            else { return nil }
+        let files = (try? fm.contentsOfDirectory(at: AfterhoursPaths.sessions,
+                                                 includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let now = Date()
+        var cache: [URL: (modified: Date, record: SessionRecord)] = [:]
+        let records = files.filter { $0.pathExtension == "json" }.compactMap { url -> SessionRecord? in
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                ?? .distantPast
+            let record: SessionRecord
+            if let cached = recordCache[url], cached.modified == modified {
+                record = cached.record
+            } else {
+                guard let data = try? Data(contentsOf: url),
+                      let decoded = try? JSONDecoder.afterhours.decode(SessionRecord.self, from: data)
+                else { return nil }
+                record = decoded
+            }
             let orphaned = record.pid.map { !Proc.isAlive($0) }
-                ?? (Date().timeIntervalSince(record.updatedAt) > 6 * 3600)
+                ?? (now.timeIntervalSince(record.updatedAt) > 6 * 3600)
             if orphaned {
                 try? fm.removeItem(at: url)
                 return nil
             }
+            cache[url] = (modified, record)
             return record
         }
+        recordCache = cache
+        return records
     }
 
     // MARK: - Presentation

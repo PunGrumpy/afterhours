@@ -118,25 +118,48 @@ struct ActivityTracker {
     private let minimumInterval: TimeInterval = 1
     private var lastResults: [Detected] = []
 
+    private struct Match {
+        let name: String
+        let kind: AgentKind?
+        let recheckAt: Date
+    }
+
+    private var matches: [Int32: Match] = [:]
+    private var matchedFor: Set<String> = []
+    /// How long an interpreter that matched no agent stays unmatched before its argv is read again.
+    private let missRecheck: TimeInterval = 60
+
     mutating func scan(enabled: Set<String>) -> [Detected] {
         let now = Date()
         if let lastScan, now.timeIntervalSince(lastScan) < minimumInterval { return lastResults }
+        guard !enabled.isEmpty else { return reset() }
+        if enabled != matchedFor {
+            matches = [:]
+            matchedFor = enabled
+        }
         let pids = Proc.allPids()
         var children: [Int32: [Int32]] = [:]
+        var parents: [Int32: Int32] = [:]
         var names: [Int32: String] = [:]
         for pid in pids {
-            if let parent = Proc.parent(pid) { children[parent, default: []].append(pid) }
+            if let parent = Proc.parent(pid) {
+                children[parent, default: []].append(pid)
+                parents[pid] = parent
+            }
             if let name = Proc.name(pid) { names[pid] = name }
         }
 
-        var roots: [(Int32, AgentKind)] = []
+        var kinds: [Int32: AgentKind] = [:]
         for (pid, name) in names {
-            guard let kind = match(pid: pid, name: name, enabled: enabled) else { continue }
+            if let kind = cachedMatch(pid: pid, name: name, enabled: enabled, now: now) { kinds[pid] = kind }
+        }
+        // Forget pids that exited, so a reused pid is matched again.
+        matches = matches.filter { names[$0.key] != nil }
+
+        var roots: [(Int32, AgentKind)] = []
+        for (pid, kind) in kinds {
             // A node wrapper that spawns the real binary would otherwise count twice.
-            if let parent = Proc.parent(pid), let parentName = names[parent],
-               match(pid: parent, name: parentName, enabled: enabled)?.id == kind.id {
-                continue
-            }
+            if let parent = parents[pid], kinds[parent]?.id == kind.id { continue }
             roots.append((pid, kind))
         }
 
@@ -165,6 +188,28 @@ struct ActivityTracker {
         lastActive = lastActive.filter { live.contains($0.key) }
         lastResults = results
         return results
+    }
+
+    /// With no agent enabled there's nothing to watch, so skip listing every process.
+    private mutating func reset() -> [Detected] {
+        lastScan = nil
+        cpuByPid = [:]
+        lastActive = [:]
+        matches = [:]
+        lastResults = []
+        return []
+    }
+
+    /// Reading argv copies a process's whole argument block, so each pid is matched once, not every tick.
+    private mutating func cachedMatch(pid: Int32, name: String, enabled: Set<String>, now: Date) -> AgentKind? {
+        if let cached = matches[pid], cached.name == name, cached.kind != nil || now < cached.recheckAt {
+            return cached.kind
+        }
+        let kind = match(pid: pid, name: name, enabled: enabled)
+        // An interpreter can still be loading its script, so a miss only holds for a while.
+        let recheckAt = AgentKind.isInterpreter(name) ? now.addingTimeInterval(missRecheck) : .distantFuture
+        matches[pid] = Match(name: name, kind: kind, recheckAt: recheckAt)
+        return kind
     }
 
     private func match(pid: Int32, name: String, enabled: Set<String>) -> AgentKind? {
