@@ -4,7 +4,7 @@
     "build": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/core/Sources/**"],
       "outputs": ["build/Afterhours.app/**"],
-      "env": ["ARCHS", "SDKROOT"]
+      "env": ["ARCHS", "SDKROOT", "CODESIGN_IDENTITY"]
     }
   }
 }

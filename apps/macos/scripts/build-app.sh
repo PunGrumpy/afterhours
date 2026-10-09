@@ -61,8 +61,21 @@ iconutil -c icns "$OUT/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns
 for bin in Afterhours afterhours-hook; do
   lipo -create $(printf "$OUT/%s/$bin " "${ARCHS[@]}") -output "$APP/Contents/MacOS/$bin"
 done
-codesign --force --sign - "$APP/Contents/MacOS/afterhours-hook"
-codesign --force --sign - "$APP"
+# A Developer ID identity signs with the hardened runtime and a secure timestamp, which notarization
+# requires. Without one the app is signed ad-hoc, which runs only after Gatekeeper's Open Anyway.
+codesign=(codesign --force --sign "${CODESIGN_IDENTITY:--}")
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then codesign+=(--options runtime --timestamp); fi
+# Apple's timestamp server sometimes returns nothing, so retry a few times.
+sign() {
+  for attempt in 1 2 3; do
+    "${codesign[@]}" "$1" && return
+    sleep "$attempt"
+  done
+  return 1
+}
+# Sign the nested helper first, since signing the bundle seals its hash.
+sign "$APP/Contents/MacOS/afterhours-hook"
+sign "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
