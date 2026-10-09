@@ -91,11 +91,44 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      - name: Import the Developer ID certificate
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          if [[ -z "$DEVELOPER_ID_P12$DEVELOPER_ID_P12_PASSWORD$NOTARY_KEY$NOTARY_KEY_ID$NOTARY_ISSUER_ID" ]]; then
+            echo "::warning::No Developer ID secrets, so the app is signed ad-hoc and isn't notarized."
+            exit 0
+          fi
+          for name in DEVELOPER_ID_P12 DEVELOPER_ID_P12_PASSWORD NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!name}" ]]; then echo "::error::Set the $name secret too, or remove all signing secrets."; exit 1; fi
+          done
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          base64 --decode <<<"$DEVELOPER_ID_P12" > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/developer-id.p12"
+          # Lets codesign use the key without a prompt that would hang the runner.
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)"
+          if [[ -z "$identity" ]]; then echo "::error::DEVELOPER_ID_P12 holds no Developer ID Application identity."; exit 1; fi
+          echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          printf '%s\n' "$NOTARY_KEY" > "$RUNNER_TEMP/notary-key.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary-key.p8" >> "$GITHUB_ENV"
       - run: bunx turbo run build --filter=@afterhours/macos
       - name: Publish the app and release notes
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
           version="$(jq -r .version apps/macos/package.json)"
           tag="@afterhours/macos@$version"

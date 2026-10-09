@@ -1,5 +1,11 @@
 # @afterhours/macos
 
+## 0.2.5
+
+### Patch Changes
+
+- 3dfeb26: Afterhours now has its own icon, the coffee mug on a navy tile, so you can spot it in Finder, Launchpad, Spotlight, and the Applications folder instead of a blank app.
+
 ## 0.2.4
 
 ### Patch Changes
