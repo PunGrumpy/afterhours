@@ -83,7 +83,7 @@ struct MenuView: View, Themed {
                 .padding(.bottom, 10)
             }
             divider
-            BatterySection(battery: model.battery, prefs: prefs)
+            BatterySection(battery: model.battery, prefs: prefs, timeLeft: model.holdTimeLeft)
             divider
             agents
             divider
@@ -300,6 +300,7 @@ private struct SectionTitle: View {
 private struct BatterySection: View, Themed {
     let battery: BatteryStatus
     let prefs: Preferences
+    let timeLeft: (minutes: Int, atCutoff: Bool)?
     @Environment(\.colorSchemeContrast) var contrast
 
     var body: some View {
@@ -322,6 +323,13 @@ private struct BatterySection: View, Themed {
                 }
                 .font(.system(size: 12).monospacedDigit())
                 .padding(.top, 8)
+                if let timeLeft {
+                    Text(timeLeftText(timeLeft))
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundStyle(palette.secondaryText)
+                        .padding(.top, 4)
+                        .transition(.opacity)
+                }
             } else {
                 Text("On AC power")
                     .font(.system(size: 12))
@@ -332,6 +340,18 @@ private struct BatterySection: View, Themed {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
+        .animation(Motion.fade, value: timeLeft == nil)
+    }
+
+    /// Says when the hold ends, so you can tell before closing the lid whether tonight's work fits.
+    private func timeLeftText(_ timeLeft: (minutes: Int, atCutoff: Bool)) -> String {
+        guard timeLeft.minutes > 0 else { return "Releasing at the cutoff" }
+        let hours = timeLeft.minutes / 60
+        let minutes = timeLeft.minutes % 60
+        let duration = hours > 0 ? "\(hours)h \(String(format: "%02d", minutes))m" : "\(minutes)m"
+        return timeLeft.atCutoff
+            ? "About \(duration) until it sleeps at \(prefs.batteryThreshold)%"
+            : "About \(duration) of battery left"
     }
 
     private var cutoff: String {

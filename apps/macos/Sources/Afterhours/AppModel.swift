@@ -114,6 +114,7 @@ final class AppModel {
         prefs = preview
         state = .holding
         holdingSince = Date().addingTimeInterval(-83 * 60)
+        battery = BatteryStatus(percent: 64, onAC: false, charging: false, minutesToEmpty: 310)
         installedAgents = ["claude", "codex", "opencode"]
         sessions = [
             AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
@@ -431,6 +432,16 @@ final class AppModel {
                 waiting: group.filter { $0.state == .waiting }.count
             )
         }
+    }
+
+    /// How long the battery lasts before the hold ends, at the cutoff if one applies, while holding on battery.
+    var holdTimeLeft: (minutes: Int, atCutoff: Bool)? {
+        guard state.isHolding, !battery.onAC, let percent = battery.percent,
+              let minutesToEmpty = battery.minutesToEmpty else { return nil }
+        let threshold = prefs.onlyWhenPluggedIn ? 0 : prefs.batteryThreshold
+        guard let minutes = HoldPolicy.minutesUntilCutoff(batteryPercent: percent, batteryThreshold: threshold,
+                                                          minutesToEmpty: minutesToEmpty) else { return nil }
+        return (minutes, threshold > 0)
     }
 
     /// Whether holding survives closing the lid.

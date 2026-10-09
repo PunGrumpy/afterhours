@@ -65,6 +65,8 @@ When agents finish or ask you something, Afterhours keeps your Mac awake so you 
 
 Change both in **Settings… > Power**.
 
+While it holds on battery, the menu shows about how long until your battery cutoff releases the hold, based on macOS's own battery estimate.
+
 ## Subscription limits
 
 The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
