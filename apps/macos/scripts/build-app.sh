@@ -54,6 +54,10 @@ VERSION="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' package.json)"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$(git rev-list --count HEAD 2>/dev/null || echo 1)" "$APP/Contents/Info.plist"
 cp -R Resources/agents "$APP/Contents/Resources/"
+swiftc -sdk "$SDK" -O -o "$OUT/render-icon" scripts/render-icon.swift
+rm -rf "$OUT/AppIcon.iconset"
+"$OUT/render-icon" Resources/AppIcon.svg "$OUT/AppIcon.iconset"
+iconutil -c icns "$OUT/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 for bin in Afterhours afterhours-hook; do
   lipo -create $(printf "$OUT/%s/$bin " "${ARCHS[@]}") -output "$APP/Contents/MacOS/$bin"
 done
