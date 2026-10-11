@@ -1,5 +1,11 @@
 # @afterhours/macos
 
+## 0.2.6
+
+### Patch Changes
+
+- df363c6: macOS no longer blocks `afterhours-hook` with "Apple could not verify" after you install Afterhours with Homebrew and open it with Open Anyway.
+
 ## 0.2.5
 
 ### Patch Changes
