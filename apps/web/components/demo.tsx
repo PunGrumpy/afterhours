@@ -109,7 +109,7 @@ const Switch = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
     aria-checked={on}
     aria-label="Keep your Mac awake while agents work"
     onClick={onToggle}
-    className="press aria-checked:bg-mac-blue relative h-6 w-10 shrink-0 rounded-full bg-white/20 transition-colors duration-200 ease-out"
+    className="aria-checked:bg-mac-blue relative h-6 w-10 shrink-0 rounded-full bg-white/20 transition-[background-color,scale] duration-200 ease-out active:scale-[0.97] motion-reduce:active:scale-100"
   >
     <span
       className={cn(
