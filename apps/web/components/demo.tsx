@@ -2,7 +2,7 @@
 
 import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { AgentLogo } from "./agent-logo";
 import { Limits } from "./demo-limits";
@@ -218,11 +218,13 @@ const MenuBar = ({
   now,
   menuOpen,
   onToggleMenu,
+  triggerRef,
 }: {
   mood: Mood;
   now: number;
   menuOpen: boolean;
   onToggleMenu: () => void;
+  triggerRef: RefObject<HTMLButtonElement | null>;
 }) => (
   <div className="relative z-10 flex h-8 items-center justify-between bg-black/20 px-3.5 text-[13px] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.25)]">
     <div className="flex items-center gap-4">
@@ -238,6 +240,7 @@ const MenuBar = ({
     </div>
     <div className="flex items-center gap-2.5 @md:gap-3.5">
       <button
+        ref={triggerRef}
         type="button"
         onPointerDown={(e) => {
           if (e.button === 0) {
@@ -558,6 +561,8 @@ const ClosedCard = ({
 
 export const Demo = () => {
   const [menuOpen, setMenuOpen] = useState(true);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
   const [lidClosed, setLidClosed] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
@@ -565,6 +570,21 @@ export const Demo = () => {
   const [limitsOpen, setLimitsOpen] = useState(false);
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
+
+  useEffect(() => {
+    const el = screen.current;
+    if (!el || !menuOpen) {
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    el.addEventListener("keydown", onKeyDown);
+    return () => el.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   const working = list.filter((a) => a.state === "working");
   const sessions = working.reduce((sum, a) => sum + a.sessions, 0);
@@ -622,6 +642,7 @@ export const Demo = () => {
               <div className="rounded-t-[3.2cqw] bg-[linear-gradient(180deg,#5a5a5f_0%,#2c2c30_1.2%,#1d1d20_100%)] px-[0.35cqw] pt-[0.35cqw] [backface-visibility:hidden]">
                 <div className="rounded-t-[2.85cqw] bg-black px-[1.6cqw] pt-[1.6cqw] pb-[2.6cqw] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]">
                   <div
+                    ref={screen}
                     className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
                     onPointerDown={(e) => {
                       if (
@@ -639,6 +660,7 @@ export const Demo = () => {
                       now={now}
                       menuOpen={menuOpen}
                       onToggleMenu={() => setMenuOpen((open) => !open)}
+                      triggerRef={trigger}
                     />
                     <Menu
                       open={menuOpen}
