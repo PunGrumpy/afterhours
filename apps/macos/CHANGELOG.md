@@ -1,5 +1,12 @@
 # @afterhours/macos
 
+## 0.3.1
+
+### Patch Changes
+
+- b619749: While Afterhours keeps your Mac awake on battery, the menu shows about how long until it lets your Mac sleep at your battery cutoff, or until the battery runs out if you have no cutoff. You can tell before closing the lid whether tonight's work fits.
+- b619749: Afterhours uses less power. It checks for agents every 15 seconds instead of every 4 when nothing is running, lets macOS group its wakeups with other apps, and no longer reads every process's arguments or every session file on each check. Hooked agents now show up right away instead of on the next check, and opening the menu refreshes your sessions.
+
 ## 0.3.0
 
 ### Minor Changes
