@@ -593,7 +593,9 @@ export const Demo = () => {
 
   const toggleLid = () => {
     if (!lidClosed) {
-      reopenMenu.current = menuOpen;
+      if (menuOpen) {
+        reopenMenu.current = true;
+      }
       setMenuOpen(false);
     }
     setLidClosed((closed) => !closed);
