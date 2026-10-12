@@ -1,5 +1,18 @@
 # @afterhours/macos
 
+## 0.3.0
+
+### Minor Changes
+
+- 780b3c1: The menu now shows your Antigravity limits: the five-hour and weekly allowances for Gemini models and for Claude and GPT models, read from the Google sign-in Antigravity already keeps on your Mac.
+- 780b3c1: Limits now fits more subscriptions in the menu. Each provider is one row with a small meter per window, and it opens by itself only when a window is about to run out or a login failed. Click a row to see every window, and hover a bar for its reset time.
+
+## 0.2.6
+
+### Patch Changes
+
+- df363c6: macOS no longer blocks `afterhours-hook` with "Apple could not verify" after you install Afterhours with Homebrew and open it with Open Anyway.
+
 ## 0.2.5
 
 ### Patch Changes

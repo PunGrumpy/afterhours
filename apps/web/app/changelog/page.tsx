@@ -55,7 +55,7 @@ const Page = async () => {
               key={group.year || "undated"}
               className="border-ink/[0.08] grid border-b md:grid-cols-[96px_minmax(0,1fr)] md:gap-x-6"
             >
-              <h2 className="text-ink/45 pt-4 text-[14px] tabular-nums max-md:pb-1">
+              <h2 className="text-ink/60 pt-4 text-[14px] tabular-nums max-md:pb-1">
                 {group.year}
               </h2>
               <ol>
@@ -71,7 +71,7 @@ const Page = async () => {
                       <span className="text-ink shrink-0 text-[15px] font-medium tabular-nums">
                         v{release.version}
                       </span>
-                      <span className="text-ink/50 group-hover:text-ink/75 min-w-0 flex-1 truncate text-[14px] max-sm:hidden">
+                      <span className="text-ink/60 group-hover:text-ink/75 min-w-0 flex-1 truncate text-[14px] max-sm:hidden">
                         {oneLine(release)}
                       </span>
                       <span className="bg-ink/[0.06] text-ink/60 ml-auto shrink-0 rounded-full px-2 py-0.5 text-[12px]">
@@ -80,7 +80,7 @@ const Page = async () => {
                       {release.date && (
                         <time
                           dateTime={release.date}
-                          className="text-ink/45 w-28 shrink-0 text-right text-[13px] tabular-nums"
+                          className="text-ink/60 w-28 shrink-0 text-right text-[13px] tabular-nums"
                         >
                           {monthDay.format(new Date(release.date))}
                         </time>

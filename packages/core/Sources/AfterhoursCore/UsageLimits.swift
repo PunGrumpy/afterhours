@@ -152,8 +152,8 @@ public struct UsageSnapshot: Sendable, Equatable {
 }
 
 /// Reads subscription quotas the way the CLIs do, with the logins they already keep on this Mac,
-/// plus accounts pooled on CLIProxyAPI hubs. Read-only: it never refreshes a token, so an expired
-/// login asks you to run the CLI once.
+/// plus accounts pooled on CLIProxyAPI hubs. Read-only: it never writes or renews a login, so an
+/// expired one asks you to run the CLI once.
 public enum UsageLimits {
     static let timeout: TimeInterval = 10
 
@@ -384,15 +384,15 @@ public enum UsageLimits {
 
     /// The workspace id lives in the id token's `https://api.openai.com/auth` claim.
     static func chatGPTAccountId(_ jwt: String) -> String? {
+        (jwtPayload(jwt)?["https://api.openai.com/auth"] as? [String: Any])?["chatgpt_account_id"] as? String
+    }
+
+    static func jwtPayload(_ jwt: String) -> [String: Any]? {
         let parts = jwt.split(separator: ".")
         guard parts.count == 3 else { return nil }
         var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
-        guard let data = Data(base64Encoded: payload),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let auth = json["https://api.openai.com/auth"] as? [String: Any]
-        else { return nil }
-        return auth["chatgpt_account_id"] as? String
+        return Data(base64Encoded: payload).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
     }
 
     /// Names a plan the way Codex does, because some plan ids don't match the plan's name.

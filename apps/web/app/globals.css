@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant transparency-reduce (@media (prefers-reduced-transparency: reduce));
+
 @theme {
   --color-canvas: #fcfcfd;
   --color-surface: #f5f6f8;
@@ -31,7 +33,12 @@ html {
   background-color: var(--color-canvas);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
-  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 ::selection {
@@ -42,6 +49,12 @@ html {
   transition: transform 140ms var(--ease-out);
   &:active {
     transform: scale(0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active {
+      transform: none;
+      opacity: 0.8;
+    }
   }
 }
 

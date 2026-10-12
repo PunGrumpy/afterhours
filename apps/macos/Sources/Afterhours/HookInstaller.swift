@@ -44,6 +44,8 @@ enum ClaudeHooks {
         let tmp = AfterhoursPaths.bin.appendingPathComponent("afterhours-hook.new")
         try? fm.removeItem(at: tmp)
         try fm.copyItem(at: bundled, to: tmp)
+        // The copy keeps the download's quarantine, and Open Anyway only covered the app, so Gatekeeper would block it.
+        removexattr(tmp.path, "com.apple.quarantine", 0)
         // One rename, so a hook firing mid-launch never finds the binary missing.
         if fm.fileExists(atPath: AfterhoursPaths.hookBinary.path) {
             _ = try fm.replaceItemAt(AfterhoursPaths.hookBinary, withItemAt: tmp)

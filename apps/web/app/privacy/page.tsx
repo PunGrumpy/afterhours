@@ -39,6 +39,12 @@ const checks = [
     to: "cli-chat-proxy.grok.com",
   },
   {
+    login:
+      "The Google sign-in in T3 Code's Antigravity profile or ~/.gemini/antigravity-acp/acp_token.json",
+    provider: "Antigravity",
+    to: "oauth2.googleapis.com for an hour-long access token, then cloudcode-pa.googleapis.com or daily-cloudcode-pa.googleapis.com, identified as Antigravity",
+  },
+  {
     login: "The management key you enter",
     provider: "CLIProxyAPI hubs you add",
     to: "The hub's URL",
@@ -46,7 +52,7 @@ const checks = [
 ];
 
 const Page = () => (
-  <LegalPage title="Privacy Policy" updated="October 3, 2026">
+  <LegalPage title="Privacy Policy" updated="October 12, 2026">
     <p>
       Afterhours is a menu bar app that runs on your Mac. It has no accounts and
       no servers, and it has no telemetry, analytics, crash reporting, or ads.
@@ -111,8 +117,10 @@ const Page = () => (
         Each check sends a login your tool already keeps on your Mac straight to
         that tool&apos;s own service, and reads back how much of each rate-limit
         window is left. It runs when you open the menu and every 5 minutes while
-        agents work. Afterhours doesn&apos;t store, refresh, or forward these
-        logins. Nothing passes through a server of ours, because there
+        agents work. Afterhours doesn&apos;t store, renew, or forward these
+        logins. Antigravity saves only a long-lived Google login, so Afterhours
+        asks Google for an access token that lasts an hour and keeps it in
+        memory. Nothing passes through a server of ours, because there
         isn&apos;t one.
       </p>
       <div className="border-ink/[0.08] -mx-1 overflow-hidden rounded-[12px] border">
@@ -129,7 +137,7 @@ const Page = () => (
               <tr key={check.provider} className="border-ink/[0.06] border-t">
                 <td className="text-ink px-4 py-2.5 align-top">
                   {check.provider}
-                  <span className="text-ink/50 block text-[13px] sm:hidden">
+                  <span className="text-ink/60 block text-[13px] sm:hidden">
                     {check.to}
                   </span>
                 </td>

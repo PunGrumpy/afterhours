@@ -40,7 +40,7 @@ export const SiteFooter = ({ className }: { className?: string }) => (
     <div className="flex flex-col gap-8 md:flex-row md:justify-between">
       <div>
         <Logo className="h-6 w-auto" />
-        <p className="text-ink/50 mt-3 text-[13px]">
+        <p className="text-ink/60 mt-3 text-[13px]">
           Brewed late at night by{" "}
           <a
             href={site.author.url}
@@ -71,7 +71,7 @@ export const SiteFooter = ({ className }: { className?: string }) => (
         </FooterColumn>
       </nav>
     </div>
-    <p className="text-ink/40 mt-10 text-[12px]">
+    <p className="text-ink/60 mt-10 text-[12px]">
       Agent logos are trademarks of their owners.
     </p>
   </footer>

@@ -55,6 +55,8 @@ struct MenuView: View, Themed {
     @Environment(\.colorSchemeContrast) var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Providers the user opened or closed by hand; the rest open only when they need attention.
+    @State private var openPools: [String: Bool] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -122,6 +124,7 @@ struct MenuView: View, Themed {
         .animation(Motion.fade, value: model.lastError)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
         .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
+        .animation(reduceMotion ? Motion.fade : Motion.settle, value: openPools)
     }
 
     private var divider: some View {
@@ -205,7 +208,7 @@ struct MenuView: View, Themed {
 
     /// Hidden until a login is found, so Macs without Claude Code or Codex never see it. Accounts
     /// pool per provider like T3 Code: collapsed, one badge per provider shows its fullest window;
-    /// expanded, each window is one bar with a segment per account.
+    /// expanded, each provider is one row that opens to a bar per window with a segment per account.
     @ViewBuilder
     private var limits: some View {
         let pools = ProviderPool.build(model.usage.accounts)
@@ -225,8 +228,13 @@ struct MenuView: View, Themed {
                     }
                 }
                 Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(pools) { PoolRows(pool: $0) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(pools) { pool in
+                            let expanded = openPools[pool.id] ?? PoolRows.needsAttention(pool)
+                            PoolRows(pool: pool, expanded: expanded, reduceMotion: reduceMotion) {
+                                openPools[pool.id] = !expanded
+                            }
+                        }
                         ForEach(model.usage.snapshot.hubErrors, id: \.self) { error in
                             Text(error)
                                 .font(.system(size: 12))
@@ -520,43 +528,126 @@ private enum UsageColor {
     }
 }
 
-/// A provider's header, its failures, and one segmented bar per window.
+/// One provider as a row: tiny meters and its fullest window while closed, a bar per window once open.
 private struct PoolRows: View, Themed {
     let pool: ProviderPool
+    let expanded: Bool
+    let reduceMotion: Bool
+    let toggle: () -> Void
+    @State private var hovering = false
     @Environment(\.colorSchemeContrast) var contrast
 
-    /// The provider names the card; the meters live inside it.
+    private static let meterWidth: CGFloat = 16
+    private static let meterHeight: CGFloat = 5
+
+    /// A provider opens by itself only when a window is heading for trouble or an account failed.
+    static func needsAttention(_ pool: ProviderPool) -> Bool {
+        let now = Date()
+        return !pool.errors.isEmpty || pool.windows.contains { UsageColor.verdict($0, now: now) != .fine }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                AgentIcon(id: pool.provider)
-                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
-                    .padding(.trailing, 4)
-                Text(pool.name).font(.system(size: 13, weight: .semibold))
-                if let plan = pool.plan {
-                    Text(plan).font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: toggle) {
+                HStack(spacing: 6) {
+                    AgentIcon(id: pool.provider).padding(.trailing, 6)
+                    // The plan gives way first when four meters leave no room for it.
+                    ViewThatFits(in: .horizontal) {
+                        if let plan = pool.plan {
+                            HStack(spacing: 6) {
+                                name
+                                Text(plan).font(.system(size: 12)).foregroundStyle(palette.tertiaryText).lineLimit(1)
+                            }
+                        }
+                        name
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                    Spacer(minLength: 8)
+                    summary
                 }
-                Spacer(minLength: 8)
-                Text(pool.accounts.count == 1 ? pool.accounts[0].locations[0] : "\(pool.accounts.count) accounts")
-                    .font(.system(size: 12).monospacedDigit())
-                    .foregroundStyle(palette.tertiaryText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                .contentShape(Rectangle())
             }
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(pool.windows) { PoolBar(window: $0) }
-                ForEach(pool.errors, id: \.self) { error in
-                    Text(error)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.orange)
-                        .fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(PressDim())
+            .onHover { hovering = $0 }
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            Collapsible(expanded: expanded, reduceMotion: reduceMotion) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(pool.windows) { PoolBar(window: $0, labelWidth: labelWidth) }
+                    ForEach(pool.errors, id: \.self) { error in
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.card))
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.card))
         }
+    }
+
+    /// As wide as the card's longest window name, so its bars line up and short names leave them room.
+    private var labelWidth: CGFloat {
+        let widths = pool.windows.map { ($0.label as NSString).size(withAttributes: [.font: PoolBar.labelFont]).width }
+        return min(140, (widths.max() ?? 0).rounded(.up))
+    }
+
+    private var name: some View {
+        Text(pool.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+    }
+
+    /// Closed, the row answers "is anything wrong"; open, the bars below do, so it names the account instead.
+    @ViewBuilder
+    private var summary: some View {
+        if expanded {
+            Text(pool.accounts.count == 1 ? pool.accounts[0].locations[0] : "\(pool.accounts.count) accounts")
+                .font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(palette.tertiaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .transition(.blurFade)
+        } else {
+            let now = Date()
+            HStack(spacing: 8) {
+                HStack(spacing: 3) {
+                    ForEach(pool.windows) { window in
+                        Capsule().fill(palette.track)
+                            .overlay(alignment: .leading) {
+                                if window.leftPercent > 0 {
+                                    Capsule()
+                                        .fill(UsageColor.verdict(window, now: now).color)
+                                        .frame(width: max(Self.meterHeight, Self.meterWidth * CGFloat(window.leftPercent) / 100))
+                                }
+                            }
+                            .frame(width: Self.meterWidth, height: Self.meterHeight)
+                    }
+                }
+                if let worst = pool.fullest {
+                    let verdict = UsageColor.verdict(worst, now: now)
+                    Text("\(worst.leftPercent)%")
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(verdict == .fine ? palette.secondaryText : verdict.color)
+                        .frame(minWidth: 34, alignment: .trailing)
+                } else {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.orange)
+                }
+            }
+            .transition(.blurFade)
+        }
+    }
+
+    private var accessibilityLabel: String {
+        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
+        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
     }
 }
 
@@ -564,41 +655,44 @@ private struct PoolBar: View, Themed {
     let window: ProviderPool.Window
     @Environment(\.colorSchemeContrast) var contrast
 
-    /// Name and outlook above, the bar, then what's left and the reset below, like the battery.
+    let labelWidth: CGFloat
+
+    static let labelFont = NSFont.systemFont(ofSize: 12, weight: .medium)
+
+    /// One line: name, bar, what's left. Only a window heading for trouble adds its outlook and reset
+    /// below; a calm one keeps them for the tooltip.
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let now = context.date
             let verdict = UsageColor.verdict(window, now: now)
-            let pace = window.pace(now: now)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+            let detail = detail(now: now)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
                     Text(window.label)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Font(Self.labelFont))
                         .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let note = outlook(pace, verdict: verdict, now: now) {
-                        Text(note)
-                            .font(.system(size: 12).monospacedDigit())
-                            .foregroundStyle(verdict == .fine ? palette.tertiaryText : verdict.color)
-                            .lineLimit(1)
+                        .frame(width: labelWidth, alignment: .leading)
+                    HStack(spacing: window.segments.count > 1 ? 3 : 0) {
+                        ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
+                            Segment(window: segment, now: now)
+                        }
                     }
+                    .frame(height: 5)
+                    Text("\(window.leftPercent)%")
+                        .font(.system(size: 12).monospacedDigit())
+                        .frame(minWidth: 34, alignment: .trailing)
                 }
-                HStack(spacing: window.segments.count > 1 ? 3 : 0) {
-                    ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
-                        Segment(window: segment, now: now)
-                    }
-                }
-                .frame(height: 6)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(window.leftPercent)% left").font(.system(size: 13).monospacedDigit())
-                    Spacer(minLength: 8)
-                    if let reset = reset(now: now) {
-                        Text(reset).font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.tertiaryText)
-                    }
+                if verdict != .fine, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundStyle(verdict.color)
+                        .lineLimit(1)
                 }
             }
+            .help(detail)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityLabel(pace: pace, verdict: verdict, now: now))
+            .accessibilityLabel([window.label, "\(window.leftPercent)% left", detail].filter { !$0.isEmpty }
+                .joined(separator: ", "))
         }
         .animation(Motion.settle, value: window.usedPercent)
     }
@@ -639,7 +733,7 @@ private struct PoolBar: View, Themed {
     }
 
     /// Where the window lands at the current rate; silent while it's too young to say.
-    private func outlook(_ pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String? {
+    private func outlook(_ pace: UsageWindow.Pace?, now: Date) -> String? {
         let spent = window.segments.filter { $0.map { $0.leftPercent.rounded() <= 0 } ?? false }.count
         if spent > 0 {
             return window.segments.count > 1 ? "\(spent) of \(window.segments.count) at limit" : "Limit reached"
@@ -649,8 +743,13 @@ private struct PoolBar: View, Themed {
         return "~\(max(1, Int(pace.projectedLeft.rounded())))% left at reset"
     }
 
-    private func reset(now: Date) -> String? {
-        window.resetsAt.map { "Resets \(countdown(to: $0, now: now))" }
+    /// "Runs out in 40m · resets in 1h 17m", or whichever half is known.
+    private func detail(now: Date) -> String {
+        let reset = window.resetsAt.map { "resets \(countdown(to: $0, now: now))" }
+        guard let outlook = outlook(window.pace(now: now), now: now) else {
+            return reset.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? ""
+        }
+        return [outlook, reset].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func countdown(to date: Date, now: Date) -> String {
@@ -659,11 +758,6 @@ private struct PoolBar: View, Themed {
         if minutes < 60 { return "in \(minutes)m" }
         if minutes < 24 * 60 { return "in \(minutes / 60)h \(minutes % 60)m" }
         return "in \(minutes / (24 * 60))d \(minutes % (24 * 60) / 60)h"
-    }
-
-    private func accessibilityLabel(pace: UsageWindow.Pace?, verdict: UsageColor.Verdict, now: Date) -> String {
-        [window.label, "\(window.leftPercent)% left", reset(now: now), outlook(pace, verdict: verdict, now: now)]
-            .compactMap { $0 }.joined(separator: ", ")
     }
 }
 

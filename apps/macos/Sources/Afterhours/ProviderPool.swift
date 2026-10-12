@@ -35,10 +35,10 @@ struct ProviderPool: Identifiable {
     let errors: [String]
 
     var id: String { provider }
-    var name: String { AgentKind.named(provider)?.displayName ?? Self.extraNames[provider] ?? provider }
+    var name: String { Self.subscriptionNames[provider] ?? AgentKind.named(provider)?.displayName ?? provider }
 
-    /// Providers with quotas but no process to detect.
-    private static let extraNames = ["grok": "Grok Build"]
+    /// Subscriptions named differently from the CLI that uses them, or with no process to detect.
+    private static let subscriptionNames = ["antigravity": "Antigravity", "grok": "Grok Build"]
 
     /// The plan when every account shares one.
     var plan: String? {
