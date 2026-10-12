@@ -8,12 +8,14 @@ OUT=build
 APP="$OUT/Afterhours.app"
 MIN_OS=14.0
 
-# Command Line Tools can ship an SDK newer than its compiler; use the newest SDK this swiftc accepts.
+# Command Line Tools can ship an SDK newer than its compiler, or one whose SwiftUI macros need a
+# plugin only Xcode has; use the newest SDK this swiftc can build a SwiftUI view with.
 pick_sdk() {
   local sdks_dir probe
   sdks_dir="$(dirname "$(xcrun --show-sdk-path)")"
   probe="$(mktemp -d)/probe.swift"
-  echo 'import Foundation' > "$probe"
+  printf '%s\n' 'import SwiftUI' 'struct Probe: View {' '  @State private var on = false' \
+    '  var body: some View { Toggle("", isOn: $on) }' '}' > "$probe"
   for sdk in $(ls -d "$sdks_dir"/MacOSX[0-9]*.sdk | sort -rV); do
     if swiftc -sdk "$sdk" -typecheck "$probe" 2>/dev/null; then echo "$sdk"; return; fi
   done
