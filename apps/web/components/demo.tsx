@@ -2,7 +2,7 @@
 
 import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { AgentLogo } from "./agent-logo";
 import { Limits } from "./demo-limits";
@@ -111,7 +111,7 @@ const Switch = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
     aria-checked={on}
     aria-label="Keep your Mac awake while agents work"
     onClick={onToggle}
-    className="press aria-checked:bg-mac-blue relative h-6 w-10 shrink-0 rounded-full bg-white/20 transition-colors duration-200 ease-out"
+    className="aria-checked:bg-mac-blue relative h-6 w-10 shrink-0 rounded-full bg-white/20 transition-[background-color,scale] duration-200 ease-out active:scale-[0.97] motion-reduce:active:scale-100"
   >
     <span
       className={cn(
@@ -192,7 +192,7 @@ const AgentRow = ({
       type="button"
       onClick={onClick}
       aria-label={`${agent.name}: ${agent.state}. Change state`}
-      className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left hover:bg-white/[0.07]"
+      className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left transition-opacity duration-150 ease-out hover:bg-white/[0.07] active:opacity-55 active:duration-0"
     >
       <AgentLogo
         id={agent.id}
@@ -220,11 +220,13 @@ const MenuBar = ({
   now,
   menuOpen,
   onToggleMenu,
+  triggerRef,
 }: {
   mood: Mood;
   now: number;
   menuOpen: boolean;
   onToggleMenu: () => void;
+  triggerRef: RefObject<HTMLButtonElement | null>;
 }) => (
   <div className="relative z-10 flex h-8 items-center justify-between bg-black/20 px-3.5 text-[13px] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.25)]">
     <div className="flex items-center gap-4">
@@ -240,8 +242,19 @@ const MenuBar = ({
     </div>
     <div className="flex items-center gap-2.5 @md:gap-3.5">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={onToggleMenu}
+        onPointerDown={(e) => {
+          if (e.button === 0) {
+            onToggleMenu();
+          }
+        }}
+        onClick={(e) => {
+          if (e.detail === 0) {
+            onToggleMenu();
+          }
+        }}
+        data-menu-trigger=""
         aria-label="Afterhours menu"
         aria-expanded={menuOpen}
         className="-mx-1.5 grid h-[22px] w-8 place-items-center rounded-[5px] aria-expanded:bg-white/20"
@@ -394,6 +407,7 @@ const Menu = ({
   return (
     <div
       ref={scroller}
+      data-menu=""
       data-open={open || undefined}
       inert={!open}
       className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
@@ -549,6 +563,8 @@ const ClosedCard = ({
 
 export const Demo = () => {
   const [menuOpen, setMenuOpen] = useState(true);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
   const [lidClosed, setLidClosed] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
@@ -556,6 +572,21 @@ export const Demo = () => {
   const [limitsOpen, setLimitsOpen] = useState(false);
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
+
+  useEffect(() => {
+    const el = screen.current;
+    if (!el || !menuOpen) {
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    el.addEventListener("keydown", onKeyDown);
+    return () => el.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   const working = list.filter((a) => a.state === "working");
   const sessions = working.reduce((sum, a) => sum + a.sessions, 0);
@@ -613,9 +644,13 @@ export const Demo = () => {
               <div className="rounded-t-[3.2cqw] bg-[linear-gradient(180deg,#5a5a5f_0%,#2c2c30_1.2%,#1d1d20_100%)] px-[0.35cqw] pt-[0.35cqw] [backface-visibility:hidden]">
                 <div className="rounded-t-[2.85cqw] bg-black px-[1.6cqw] pt-[1.6cqw] pb-[2.6cqw] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]">
                   <div
+                    ref={screen}
                     className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
                     onPointerDown={(e) => {
-                      if (e.target === e.currentTarget) {
+                      if (
+                        e.target instanceof Element &&
+                        !e.target.closest("[data-menu], [data-menu-trigger]")
+                      ) {
                         setMenuOpen(false);
                       }
                     }}
@@ -627,6 +662,7 @@ export const Demo = () => {
                       now={now}
                       menuOpen={menuOpen}
                       onToggleMenu={() => setMenuOpen((open) => !open)}
+                      triggerRef={trigger}
                     />
                     <Menu
                       open={menuOpen}
