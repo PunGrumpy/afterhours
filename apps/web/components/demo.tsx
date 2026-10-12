@@ -548,6 +548,7 @@ const ClosedCard = ({
 export const Demo = () => {
   const [menuOpen, setMenuOpen] = useState(true);
   const [lidClosed, setLidClosed] = useState(false);
+  const reopenMenu = useRef(false);
   const [enabled, setEnabled] = useState(true);
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [list, setList] = useState(initialAgents);
@@ -588,8 +589,11 @@ export const Demo = () => {
   };
 
   const toggleLid = () => {
+    if (!lidClosed) {
+      reopenMenu.current = menuOpen;
+      setMenuOpen(false);
+    }
     setLidClosed((closed) => !closed);
-    setMenuOpen(false);
   };
 
   return (
@@ -607,6 +611,22 @@ export const Demo = () => {
               className="relative origin-bottom transition-transform duration-[900ms] ease-in-out [transform-style:preserve-3d] data-[closed]:[transform:rotateX(-90deg)] motion-reduce:transition-opacity motion-reduce:duration-300 motion-reduce:data-[closed]:[transform:none] motion-reduce:data-[closed]:opacity-0"
               data-closed={lidClosed || undefined}
               inert={lidClosed}
+              onTransitionEnd={(e) => {
+                if (
+                  e.target !== e.currentTarget ||
+                  lidClosed ||
+                  !reopenMenu.current
+                ) {
+                  return;
+                }
+                if (
+                  e.propertyName === "transform" ||
+                  e.propertyName === "opacity"
+                ) {
+                  reopenMenu.current = false;
+                  setMenuOpen(true);
+                }
+              }}
             >
               <div className="rounded-t-[3.2cqw] bg-[linear-gradient(180deg,#5a5a5f_0%,#2c2c30_1.2%,#1d1d20_100%)] px-[0.35cqw] pt-[0.35cqw] [backface-visibility:hidden]">
                 <div className="rounded-t-[2.85cqw] bg-black px-[1.6cqw] pt-[1.6cqw] pb-[2.6cqw] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]">
