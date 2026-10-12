@@ -100,7 +100,9 @@ const useElapsedMinutes = () => {
   return minutes;
 };
 
-const Divider = () => <div className="mx-4 h-px bg-white/10" />;
+const Divider = () => (
+  <div className="mx-4 h-px bg-white/10 contrast-more:bg-white/35" />
+);
 
 const Switch = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <button
@@ -394,7 +396,7 @@ const Menu = ({
       ref={scroller}
       data-open={open || undefined}
       inert={!open}
-      className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
+      className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <div
@@ -670,7 +672,7 @@ export const Demo = () => {
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
-        <p className="text-ink/55 text-[14px] text-balance">
+        <p className="text-ink/60 text-[14px] text-balance">
           Psst… it’s interactive. Flip the switch, click an agent, or
         </p>
         <button
