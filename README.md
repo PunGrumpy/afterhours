@@ -75,8 +75,9 @@ The menu shows how much of each subscription's rate-limit windows is left and wh
 - **Copilot**: `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login
 - **OpenCode Go**: `~/.local/share/opencode/auth.json`
 - **Grok Build**: `~/.grok/auth.json`
+- **Antigravity**: the Google sign-in in T3 Code's Antigravity profile, or `~/.gemini/antigravity-acp/acp_token.json`
 
-Afterhours never stores or refreshes a login. If one expires, run that tool once. Turn it off in **Settings… > Limits**.
+Afterhours never stores or renews a login. Antigravity saves only a long-lived Google login, so Afterhours asks Google for an access token that lasts an hour and keeps it in memory. If a login expires, run that tool once. Turn it off in **Settings… > Limits**.
 
 If you pool accounts on a [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) hub, add it under **Settings… > Limits > Usage providers** with its URL and management key. Its accounts join the menu, pooled per provider like T3 Code's Limits page: one bar per window with a segment per account. The key is kept in your Keychain, and Afterhours only reads through the hub. Use an `https` URL unless the hub runs on this Mac or your local network, because every request carries the key.
 
@@ -116,9 +117,10 @@ The only network requests are the subscription checks described above. They run 
 | Copilot | `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login | `api.github.com`, presented as Copilot Chat |
 | Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh`, presented as Cursor's CLI |
 | Grok Build | `~/.grok/auth.json` | `cli-chat-proxy.grok.com` |
+| Antigravity | the Google sign-in in T3 Code's Antigravity profile or `~/.gemini/antigravity-acp/acp_token.json` | `oauth2.googleapis.com` for an hour-long access token, then `cloudcode-pa.googleapis.com` or `daily-cloudcode-pa.googleapis.com`, presented as Antigravity |
 | CLIProxyAPI hubs you add | the management key you enter | the hub's URL |
 
-Afterhours never stores, refreshes, or forwards a login anywhere else. Turn the setting off, and no request goes out at all.
+Afterhours never stores, renews, or forwards a login anywhere else. Antigravity's access token stays in memory and is never written to disk. Turn the setting off, and no request goes out at all.
 
 The hook receives each event Claude Code sends, which can include your prompt and a tool's input and output, and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
 

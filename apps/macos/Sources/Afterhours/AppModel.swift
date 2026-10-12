@@ -133,6 +133,12 @@ final class AppModel {
                 window("primary", .session, "Session", 12, hours: 3.7),
                 window("secondary", .weekly, "Weekly", 34, hours: 88),
             ]),
+            UsageAccount(provider: "antigravity", plan: "Google AI Pro", locations: ["you@example.com"], windows: [
+                window("gemini-weekly", .weekly, "Weekly · Gemini", 9, hours: 150),
+                window("gemini-5h", .session, "Session · Gemini", 8, hours: 4.2),
+                window("3p-weekly", .weekly, "Weekly · Claude & GPT", 0, hours: 167),
+                window("3p-5h", .session, "Session · Claude & GPT", 0, hours: 5),
+            ]),
         ], hubErrors: ["Spare hub: The hub rejected the management key"])
     }
 
