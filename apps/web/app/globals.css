@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant transparency-reduce (@media (prefers-reduced-transparency: reduce));
+
 @theme {
   --color-canvas: #fcfcfd;
   --color-surface: #f5f6f8;
