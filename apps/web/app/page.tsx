@@ -86,12 +86,12 @@ const Page = () => (
         id="details"
         className="mx-auto mt-32 max-w-[1216px] scroll-mt-8 px-6"
       >
-        <p className="text-ink/50 text-[13px] font-medium">
+        <p className="text-ink/60 text-[13px] font-medium">
           The everyday details
         </p>
         <h2 className="mt-2 max-w-[36rem] text-[clamp(1.5rem,3vw,1.75rem)] leading-tight font-semibold tracking-[-0.02em]">
           Stays up late.{" "}
-          <span className="text-ink/45">
+          <span className="text-ink/55">
             So you can go to bed while agents finish the job.
           </span>
         </h2>

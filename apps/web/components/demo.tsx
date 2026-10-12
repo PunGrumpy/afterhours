@@ -670,7 +670,7 @@ export const Demo = () => {
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
-        <p className="text-ink/55 text-[14px] text-balance">
+        <p className="text-ink/60 text-[14px] text-balance">
           Psst… it’s interactive. Flip the switch, click an agent, or
         </p>
         <button

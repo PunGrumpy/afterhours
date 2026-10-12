@@ -88,7 +88,7 @@ export const Features = () => (
           </div>
           <div className="mt-2.5 flex justify-between text-[13px] tabular-nums">
             <span className="font-medium">23% left</span>
-            <span className="text-ink/50">Stops below 15%</span>
+            <span className="text-ink/60">Stops below 15%</span>
           </div>
         </div>
       }
@@ -109,7 +109,7 @@ export const Features = () => (
           ).map(([mood, label]) => (
             <div key={mood} className="flex flex-col items-center gap-1.5">
               <Mug mood={mood} optical={false} className="text-ink size-10" />
-              <span className="text-ink/50 text-[12px]">{label}</span>
+              <span className="text-ink/60 text-[12px]">{label}</span>
             </div>
           ))}
         </div>

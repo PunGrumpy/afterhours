@@ -16,7 +16,7 @@ export const LegalPage = ({
   <div className="overflow-x-clip">
     <SiteHeader />
     <main className="mx-auto max-w-[680px] px-6 pt-16 md:pt-24">
-      <p className="text-ink/50 text-[13px] font-medium">
+      <p className="text-ink/60 text-[13px] font-medium">
         Last updated {updated}
       </p>
       <h1 className="mt-2 font-serif text-[clamp(2.5rem,6vw,3.5rem)] leading-[1.05] tracking-[-0.02em]">

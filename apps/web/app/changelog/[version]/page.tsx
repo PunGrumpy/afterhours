@@ -54,14 +54,14 @@ const Page = async ({ params }: PageProps<"/changelog/[version]">) => {
       <main className="mx-auto max-w-[680px] px-6 pt-16 md:pt-24">
         <Link
           href="/changelog"
-          className="text-ink/55 hover:text-ink -ml-1 inline-flex items-center gap-1 text-[13px] font-medium"
+          className="text-ink/60 hover:text-ink -ml-1 inline-flex items-center gap-1 text-[13px] font-medium"
         >
           <ChevronIcon className="size-3.5 rotate-180" />
           Changelog
         </Link>
         <div className="mt-6 flex items-center gap-3 text-[13px]">
           {release.date && (
-            <time dateTime={release.date} className="text-ink/50 tabular-nums">
+            <time dateTime={release.date} className="text-ink/60 tabular-nums">
               {fullDate.format(new Date(release.date))}
             </time>
           )}
@@ -105,9 +105,9 @@ const Page = async ({ params }: PageProps<"/changelog/[version]">) => {
           {older ? (
             <Link
               href={`/changelog/${older.slug}`}
-              className="text-ink/55 hover:text-ink flex flex-col gap-0.5"
+              className="text-ink/60 hover:text-ink flex flex-col gap-0.5"
             >
-              <span className="text-ink/40 text-[12px]">Older</span>
+              <span className="text-ink/60 text-[12px]">Older</span>
               <span className="text-ink font-medium">v{older.version}</span>
             </Link>
           ) : (
@@ -116,9 +116,9 @@ const Page = async ({ params }: PageProps<"/changelog/[version]">) => {
           {newer && (
             <Link
               href={`/changelog/${newer.slug}`}
-              className="text-ink/55 hover:text-ink flex flex-col items-end gap-0.5 text-right"
+              className="text-ink/60 hover:text-ink flex flex-col items-end gap-0.5 text-right"
             >
-              <span className="text-ink/40 text-[12px]">Newer</span>
+              <span className="text-ink/60 text-[12px]">Newer</span>
               <span className="text-ink font-medium">v{newer.version}</span>
             </Link>
           )}

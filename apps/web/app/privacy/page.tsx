@@ -137,7 +137,7 @@ const Page = () => (
               <tr key={check.provider} className="border-ink/[0.06] border-t">
                 <td className="text-ink px-4 py-2.5 align-top">
                   {check.provider}
-                  <span className="text-ink/50 block text-[13px] sm:hidden">
+                  <span className="text-ink/60 block text-[13px] sm:hidden">
                     {check.to}
                   </span>
                 </td>
