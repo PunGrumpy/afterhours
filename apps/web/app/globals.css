@@ -48,6 +48,12 @@ html {
   &:active {
     transform: scale(0.97);
   }
+  @media (prefers-reduced-motion: reduce) {
+    &:active {
+      transform: none;
+      opacity: 0.8;
+    }
+  }
 }
 
 @utility grain {
