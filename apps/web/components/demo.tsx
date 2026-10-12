@@ -239,7 +239,16 @@ const MenuBar = ({
     <div className="flex items-center gap-2.5 @md:gap-3.5">
       <button
         type="button"
-        onClick={onToggleMenu}
+        onPointerDown={(e) => {
+          if (e.button === 0) {
+            onToggleMenu();
+          }
+        }}
+        onClick={(e) => {
+          if (e.detail === 0) {
+            onToggleMenu();
+          }
+        }}
         data-menu-trigger=""
         aria-label="Afterhours menu"
         aria-expanded={menuOpen}
