@@ -240,6 +240,7 @@ const MenuBar = ({
       <button
         type="button"
         onClick={onToggleMenu}
+        data-menu-trigger=""
         aria-label="Afterhours menu"
         aria-expanded={menuOpen}
         className="-mx-1.5 grid h-[22px] w-8 place-items-center rounded-[5px] aria-expanded:bg-white/20"
@@ -392,6 +393,7 @@ const Menu = ({
   return (
     <div
       ref={scroller}
+      data-menu=""
       data-open={open || undefined}
       inert={!open}
       className="bg-menu/[0.86] absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
@@ -613,7 +615,10 @@ export const Demo = () => {
                   <div
                     className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
                     onPointerDown={(e) => {
-                      if (e.target === e.currentTarget) {
+                      if (
+                        e.target instanceof Element &&
+                        !e.target.closest("[data-menu], [data-menu-trigger]")
+                      ) {
                         setMenuOpen(false);
                       }
                     }}
