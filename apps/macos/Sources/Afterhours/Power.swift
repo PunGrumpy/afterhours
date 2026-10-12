@@ -7,6 +7,8 @@ nonisolated struct BatteryStatus: Equatable {
     var percent: Int?  // nil on desktops
     var onAC: Bool
     var charging: Bool
+    /// macOS's estimate on battery, nil while it's still measuring or on AC.
+    var minutesToEmpty: Int? = nil
 }
 
 nonisolated enum Power {
@@ -21,8 +23,11 @@ nonisolated enum Power {
                   let current = desc[kIOPSCurrentCapacityKey] as? Int,
                   let max = desc[kIOPSMaxCapacityKey] as? Int, max > 0
             else { continue }
+            // Reported as -1 for the first minutes on battery, while macOS measures the draw.
+            let estimate = desc[kIOPSTimeToEmptyKey] as? Int
             return BatteryStatus(percent: current * 100 / max, onAC: onAC,
-                                 charging: desc[kIOPSIsChargingKey] as? Bool ?? false)
+                                 charging: desc[kIOPSIsChargingKey] as? Bool ?? false,
+                                 minutesToEmpty: !onAC && (estimate ?? 0) > 0 ? estimate : nil)
         }
         return BatteryStatus(percent: nil, onAC: onAC, charging: false)
     }

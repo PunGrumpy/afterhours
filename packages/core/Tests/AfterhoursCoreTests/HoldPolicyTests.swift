@@ -6,6 +6,24 @@ private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
 private func minutes(_ count: Double) -> TimeInterval { count * 60 }
 
+// MARK: - Battery left
+
+@Test func withoutACutoffTheWholeBatteryCounts() {
+    #expect(HoldPolicy.minutesUntilCutoff(batteryPercent: 80, batteryThreshold: 0, minutesToEmpty: 240) == 240)
+}
+
+@Test func aCutoffTakesItsShareOffTheEstimate() {
+    #expect(HoldPolicy.minutesUntilCutoff(batteryPercent: 80, batteryThreshold: 20, minutesToEmpty: 240) == 180)
+}
+
+@Test func atOrBelowTheCutoffNothingIsLeft() {
+    #expect(HoldPolicy.minutesUntilCutoff(batteryPercent: 15, batteryThreshold: 20, minutesToEmpty: 60) == 0)
+}
+
+@Test func anUnknownEstimateGivesNoAnswer() {
+    #expect(HoldPolicy.minutesUntilCutoff(batteryPercent: 80, batteryThreshold: 20, minutesToEmpty: -1) == nil)
+}
+
 // MARK: - What state wins
 
 @Test func turningAfterhoursOffBeatsEverything() {

@@ -52,6 +52,14 @@ public enum HoldPolicy {
         return nil
     }
 
+    /// Minutes of battery before the cutoff releases the hold, scaling macOS's time-to-empty by the share above it.
+    public static func minutesUntilCutoff(batteryPercent: Int, batteryThreshold: Int, minutesToEmpty: Int) -> Int? {
+        guard minutesToEmpty > 0, batteryPercent > 0 else { return nil }
+        let floor = min(max(batteryThreshold, 0), 100)
+        guard batteryPercent > floor else { return 0 }
+        return minutesToEmpty * (batteryPercent - floor) / batteryPercent
+    }
+
     /// Off beats paused, paused beats the rest, nothing to hold for is idle, and a safety rule beats a hold.
     public static func state(enabled: Bool, pausedUntil: Date?, reason: HoldReason?, blocker: String?) -> HoldState {
         if !enabled { return .disabled }
