@@ -494,10 +494,12 @@ const ClosedCard = ({
   hold,
   sessions,
   elapsed,
+  shown,
 }: {
   hold: Hold;
   sessions: number;
   elapsed: number;
+  shown: boolean;
 }) => {
   const awake = hold === "working" || hold === "waiting";
   const plural = sessions === 1 ? "session" : "sessions";
@@ -527,12 +529,13 @@ const ClosedCard = ({
 
   return (
     <div
-      className="blur-in pointer-events-none absolute inset-x-0 top-[18%] flex flex-col items-center gap-4 text-center"
-      style={{ animationDelay: "450ms", animationFillMode: "backwards" }}
+      aria-hidden={!shown}
+      data-shown={shown || undefined}
+      className="pointer-events-none absolute inset-x-0 top-[18%] flex flex-col items-center gap-4 text-center opacity-0 blur-[2px] transition-[opacity,filter] duration-200 ease-out data-[shown]:opacity-100 data-[shown]:blur-none data-[shown]:delay-[450ms]"
     >
       <Mug
         mood={moodFor[hold]}
-        steaming={awake}
+        steaming={awake && shown}
         className="size-24 text-white md:size-32"
       />
       <div>
@@ -683,9 +686,12 @@ export const Demo = () => {
 
           <Base />
 
-          {lidClosed && (
-            <ClosedCard hold={hold} sessions={sessions} elapsed={elapsed} />
-          )}
+          <ClosedCard
+            hold={hold}
+            sessions={sessions}
+            elapsed={elapsed}
+            shown={lidClosed}
+          />
         </div>
       </div>
 
