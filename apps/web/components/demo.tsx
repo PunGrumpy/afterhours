@@ -190,7 +190,7 @@ const AgentRow = ({
       type="button"
       onClick={onClick}
       aria-label={`${agent.name}: ${agent.state}. Change state`}
-      className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left hover:bg-white/[0.07]"
+      className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left transition-opacity duration-150 ease-out hover:bg-white/[0.07] active:opacity-55 active:duration-0"
     >
       <AgentLogo
         id={agent.id}
