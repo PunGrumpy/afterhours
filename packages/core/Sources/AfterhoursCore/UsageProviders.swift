@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Providers beyond Claude Code and Codex, each read from the login its own tool keeps on this Mac.
 /// Every reader answers nil when the tool isn't signed in, so Macs without it never see a row.
@@ -8,7 +9,8 @@ extension UsageLimits {
         async let copilot = readCopilot()
         async let cursor = readCursor()
         async let grok = readGrok()
-        return await [opencode, copilot, cursor, grok].compactMap { $0 }
+        async let antigravity = readAntigravity()
+        return await [opencode, copilot, cursor, grok].compactMap { $0 } + antigravity
     }
 
     static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
@@ -256,5 +258,202 @@ extension UsageLimits {
                                      usedPercent: used, resetsAt: billing.config?.currentPeriod?.end.flatMap(parseISO8601))
             return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [window])
         }
+    }
+
+    // MARK: - Antigravity
+
+    private struct AntigravityLogin: Decodable {
+        let clientId: String
+        let clientSecret: String
+        let refreshToken: String
+        let projectId: String?
+    }
+
+    private struct GoogleToken: Decodable {
+        let accessToken: String
+        let expiresIn: Double
+        let idToken: String?
+    }
+
+    private struct AntigravityTiers: Decodable {
+        struct Tier: Decodable { let name: String? }
+        let paidTier: Tier?
+    }
+
+    private struct AntigravityQuota: Decodable {
+        struct Bucket: Decodable {
+            let bucketId: String
+            let window: String?
+            let remainingFraction: Double?
+            let resetTime: String?
+            let disabled: Bool?
+        }
+
+        struct Group: Decodable {
+            let displayName: String?
+            let buckets: [Bucket]?
+        }
+
+        let groups: [Group]?
+        let buckets: [Bucket]?
+    }
+
+    private struct AntigravitySession {
+        let accessToken: String
+        let expiresAt: Date
+        let email: String?
+        let plan: String?
+    }
+
+    static let googleTokenURL = URL(string: "https://oauth2.googleapis.com/token")!
+    /// The stable endpoint, then the daily one Antigravity's own builds call.
+    static let antigravityHosts = ["https://cloudcode-pa.googleapis.com", "https://daily-cloudcode-pa.googleapis.com"]
+
+    private static let antigravityUserAgent: String = {
+        #if arch(arm64)
+        let architecture = "arm64"
+        #else
+        let architecture = "x64"
+        #endif
+        return "antigravity/hub/1.0.0 (aidev_client; os_type=darwin; arch=\(architecture); cl=963137146)"
+    }()
+
+    /// Access tokens by refresh token, so Google is asked for a new one once an hour instead of on every read.
+    private static let antigravitySessions = OSAllocatedUnfairLock(initialState: [String: AntigravitySession]())
+
+    /// The Google sign-in Antigravity's ACP agent saves under its Gemini home, which T3 Code points at a profile of its own.
+    static func antigravityLogins(home: URL, geminiHome: URL? = nil) -> [(file: URL, location: String)] {
+        let gemini = geminiHome ?? home.appendingPathComponent(".gemini")
+        let profiles = home.appendingPathComponent(".t3/userdata/providers/antigravity")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: profiles.path)) ?? []
+        var logins = [(file: gemini, location: shortPath(gemini))]
+        logins += names.sorted().map { (file: profiles.appendingPathComponent($0), location: "T3 Code") }
+        return logins.map { (file: $0.file.appendingPathComponent("antigravity-acp/acp_token.json"), location: $0.location) }
+            .filter { FileManager.default.fileExists(atPath: $0.file.path) }
+    }
+
+    private static func readAntigravity() async -> [UsageAccount] {
+        let geminiHome = ProcessInfo.processInfo.environment["GEMINI_HOME"].flatMap {
+            $0.isEmpty ? nil : URL(fileURLWithPath: $0)
+        }
+        var accounts: [UsageAccount] = []
+        var seen: Set<String> = []
+        for (file, fallback) in antigravityLogins(home: home, geminiHome: geminiHome) {
+            guard let data = try? Data(contentsOf: file),
+                  let login = try? snakeCaseDecoder.decode(AntigravityLogin.self, from: data)
+            else { continue }
+            let session = await antigravitySession(login)
+            // One Google account signed in twice is one row.
+            let location = (try? session.get())?.email ?? fallback
+            guard seen.insert(location).inserted else { continue }
+            switch session {
+            case .failure(let error):
+                accounts.append(UsageAccount(provider: "antigravity", plan: nil, locations: [location], windows: [],
+                                             error: error.message(signIn: antigravitySignIn)))
+            case .success(let session):
+                let result = await antigravityCall("retrieveUserQuotaSummary", token: session.accessToken,
+                                                   body: login.projectId.map { ["project": $0] } ?? [:])
+                if case .failure(.status(401)) = result {
+                    antigravitySessions.withLock { $0[login.refreshToken] = nil }
+                }
+                if let account = antigravityAccount(result, plan: session.plan, locations: [location]) {
+                    accounts.append(account)
+                }
+            }
+        }
+        return accounts
+    }
+
+    private static let antigravitySignIn = "Sign in to Antigravity again"
+
+    /// Antigravity saves only a long-lived Google login, so each hour it's exchanged for an access token
+    /// that stays in memory. Google keeps the saved login valid, and nothing is written back.
+    private static func antigravitySession(_ login: AntigravityLogin) async -> Result<AntigravitySession, FetchError> {
+        let cached = antigravitySessions.withLock { $0[login.refreshToken] }
+        if let cached, cached.expiresAt.timeIntervalSinceNow > 60 { return .success(cached) }
+        var form = URLComponents()
+        form.queryItems = [URLQueryItem(name: "client_id", value: login.clientId),
+                           URLQueryItem(name: "client_secret", value: login.clientSecret),
+                           URLQueryItem(name: "refresh_token", value: login.refreshToken),
+                           URLQueryItem(name: "grant_type", value: "refresh_token")]
+        var request = URLRequest(url: googleTokenURL, timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        // URLComponents leaves "+" alone, which a form reads as a space.
+        request.httpBody = form.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B").data(using: .utf8)
+        switch await send(request).flatMap({ decode(GoogleToken.self, from: $0) }) {
+        case .failure(.status(400)):
+            return .failure(.status(401))  // Google answers 400 for a login it revoked.
+        case .failure(let error):
+            return .failure(error)
+        case .success(let token):
+            let tiers = await antigravityCall("loadCodeAssist", token: token.accessToken, body: [:])
+                .flatMap { decode(AntigravityTiers.self, from: $0) }
+            let session = AntigravitySession(
+                accessToken: token.accessToken, expiresAt: Date().addingTimeInterval(token.expiresIn),
+                email: token.idToken.flatMap(jwtPayload)?["email"] as? String,
+                plan: (try? tiers.get())?.paidTier?.name)
+            antigravitySessions.withLock { $0[login.refreshToken] = session }
+            return .success(session)
+        }
+    }
+
+    /// Answers with the first host that succeeds, or the last one's failure.
+    private static func antigravityCall(_ operation: String, token: String,
+                                        body: [String: String]) async -> Result<Data, FetchError> {
+        var result: Result<Data, FetchError> = .failure(.network("Antigravity has no usage endpoint"))
+        for host in antigravityHosts {
+            guard let url = URL(string: "\(host)/v1internal:\(operation)") else { continue }
+            var request = URLRequest(url: url, timeoutInterval: timeout)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(antigravityUserAgent, forHTTPHeaderField: "User-Agent")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            result = await send(request)
+            if case .success = result { break }
+        }
+        return result
+    }
+
+    /// Nil when the account reports no five-hour or weekly allowance, as with an API key or a Cloud project.
+    static func antigravityAccount(_ result: Result<Data, FetchError>, plan: String?,
+                                   locations: [String]) -> UsageAccount? {
+        let quota: AntigravityQuota
+        switch result.flatMap({ decode(AntigravityQuota.self, from: $0) }) {
+        case .failure(let error):
+            return UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: [],
+                                error: error.message(signIn: antigravitySignIn))
+        case .success(let decoded):
+            quota = decoded
+        }
+        var groups = (quota.groups ?? []).filter { $0.buckets?.isEmpty == false }
+        if groups.isEmpty { groups = [AntigravityQuota.Group(displayName: nil, buckets: quota.buckets)] }
+        var windows: [UsageWindow] = []
+        for group in groups {
+            for bucket in group.buckets ?? [] where bucket.disabled != true {
+                let (kind, span): (UsageWindow.Kind, String)
+                switch bucket.window {
+                case "5h": (kind, span) = (.session, "Session")
+                case "weekly": (kind, span) = (.weekly, "Weekly")
+                default: continue
+                }
+                guard let left = bucket.remainingFraction, !windows.contains(where: { $0.id == bucket.bucketId })
+                else { continue }
+                let family: String
+                if bucket.bucketId.hasPrefix("gemini-") {
+                    family = "Gemini"
+                } else if bucket.bucketId.hasPrefix("3p-") {
+                    family = "Claude & GPT"  // Both draw on one allowance.
+                } else {
+                    family = group.displayName?.trimmingCharacters(in: .whitespaces) ?? bucket.bucketId
+                }
+                windows.append(UsageWindow(id: bucket.bucketId, kind: kind, label: "\(span) · \(family)",
+                                           usedPercent: (1 - left) * 100,
+                                           resetsAt: bucket.resetTime.flatMap(parseISO8601)))
+            }
+        }
+        return windows.isEmpty ? nil
+            : UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: windows)
     }
 }

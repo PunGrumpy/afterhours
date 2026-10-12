@@ -30,3 +30,59 @@ private func runSQLite(_ database: URL, _ sql: String) throws {
             == "token-123")
     #expect(UsageLimits.sqliteValue(database: database, key: "missing", environment: environment) == nil)
 }
+
+// MARK: - Antigravity
+
+private let antigravityFixture = Data("""
+    {"groups": [
+      {"displayName": "Gemini Models", "buckets": [
+        {"bucketId": "gemini-weekly", "window": "weekly", "resetTime": "2026-10-18T13:49:14Z",
+         "remainingFraction": 0.75},
+        {"bucketId": "gemini-5h", "window": "5h", "resetTime": "2026-10-12T07:09:29Z", "remainingFraction": 1}]},
+      {"displayName": "Claude and GPT models", "buckets": [
+        {"bucketId": "3p-weekly", "window": "weekly", "resetTime": "2026-10-19T02:09:29Z", "remainingFraction": 0},
+        {"bucketId": "3p-unreported", "window": "weekly", "resetTime": "2026-10-19T02:09:29Z"},
+        {"bucketId": "3p-5h", "window": "5h", "remainingFraction": 0.5, "disabled": true},
+        {"bucketId": "3p-daily", "window": "24h", "remainingFraction": 0.5}]}
+    ]}
+    """.utf8)
+
+@Test func antigravityAccountReadsEachGroupsWindows() throws {
+    let account = try #require(UsageLimits.antigravityAccount(.success(antigravityFixture), plan: "Google AI Pro",
+                                                              locations: ["a@b.c"]))
+    #expect(account.windows.map(\.id) == ["gemini-weekly", "gemini-5h", "3p-weekly"])
+    #expect(account.windows.map(\.kind) == [.weekly, .session, .weekly])
+    #expect(account.windows.map(\.label) == ["Weekly · Gemini", "Session · Gemini", "Weekly · Claude & GPT"])
+    #expect(account.windows.map(\.usedPercent) == [25, 0, 100])
+    #expect(account.windows[0].resetsAt == Date(timeIntervalSince1970: 1_792_331_354))
+}
+
+@Test func antigravityAccountIsHiddenWithoutAnAllowance() {
+    #expect(UsageLimits.antigravityAccount(.success(Data("{}".utf8)), plan: nil, locations: ["a@b.c"]) == nil)
+}
+
+@Test func antigravityAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.antigravityAccount(.failure(.status(401)), plan: nil, locations: ["T3 Code"])
+    #expect(account?.windows.isEmpty == true)
+    #expect(account?.error == "Sign in to Antigravity again")
+}
+
+@Test func antigravityLoginsCoverTheGeminiHomeAndT3CodeProfiles() throws {
+    let home = FileManager.default.temporaryDirectory
+        .appendingPathComponent("afterhours-tests-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let profiles = home.appendingPathComponent(".t3/userdata/providers/antigravity")
+    for dir in [home.appendingPathComponent(".gemini"), profiles.appendingPathComponent("b"),
+                profiles.appendingPathComponent("a"), profiles.appendingPathComponent("signed-out")] {
+        let acp = dir.appendingPathComponent("antigravity-acp", isDirectory: true)
+        try FileManager.default.createDirectory(at: acp, withIntermediateDirectories: true)
+        if dir.lastPathComponent != "signed-out" {
+            try Data("{}".utf8).write(to: acp.appendingPathComponent("acp_token.json"))
+        }
+    }
+    let logins = UsageLimits.antigravityLogins(home: home)
+    #expect(logins.map(\.file.path) == [".gemini", ".t3/userdata/providers/antigravity/a",
+                                        ".t3/userdata/providers/antigravity/b"]
+        .map { home.appendingPathComponent("\($0)/antigravity-acp/acp_token.json").path })
+    #expect(logins.map(\.location).dropFirst() == ["T3 Code", "T3 Code"])
+}
