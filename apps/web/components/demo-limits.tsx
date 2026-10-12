@@ -1,6 +1,6 @@
 import { cva } from "class-variance-authority";
 import { cn } from "cn";
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { RefObject } from "react";
 
 import { AgentLogo } from "./agent-logo";
@@ -243,8 +243,25 @@ export const Limits = ({
   const id = useId();
   const row = useRef<HTMLButtonElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const frame = useRef(0);
+
+  useEffect(() => {
+    const scroller = menu.current;
+    if (!scroller) {
+      return;
+    }
+    const halt = () => cancelAnimationFrame(frame.current);
+    scroller.addEventListener("wheel", halt, { passive: true });
+    scroller.addEventListener("touchstart", halt, { passive: true });
+    return () => {
+      halt();
+      scroller.removeEventListener("wheel", halt);
+      scroller.removeEventListener("touchstart", halt);
+    };
+  }, [menu]);
 
   const reveal = () => {
+    cancelAnimationFrame(frame.current);
     const scroller = menu.current;
     if (!scroller || !row.current || !body.current) {
       return;
@@ -258,7 +275,7 @@ export const Limits = ({
       return;
     }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      requestAnimationFrame(() => {
+      frame.current = requestAnimationFrame(() => {
         scroller.scrollTop = end;
       });
       return;
@@ -268,10 +285,10 @@ export const Limits = ({
       const progress = Math.min(1, (time - began) / 300);
       scroller.scrollTop = start + (end - start) * settle(progress);
       if (progress < 1) {
-        requestAnimationFrame(step);
+        frame.current = requestAnimationFrame(step);
       }
     };
-    requestAnimationFrame(step);
+    frame.current = requestAnimationFrame(step);
   };
 
   return (
@@ -282,6 +299,7 @@ export const Limits = ({
         aria-expanded={expanded}
         aria-controls={id}
         onClick={() => {
+          cancelAnimationFrame(frame.current);
           onToggle();
           if (!expanded) {
             reveal();
