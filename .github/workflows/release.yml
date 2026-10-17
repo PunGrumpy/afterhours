@@ -78,8 +78,10 @@ jobs:
     needs: publish
     # Run it by hand to rebuild the app for the current version's tag.
     if: >-
-      !cancelled() && (github.event_name == 'workflow_dispatch' || contains(needs.publish.outputs.published-packages, '"@afterhours/macos"'))
+      !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || contains(needs.publish.outputs.published-packages, '"@afterhours/macos"'))
     runs-on: macos-26
+    environment: release
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
