@@ -24,9 +24,13 @@ Check it with `security find-identity -v -p codesigning`. It should list the ide
 3. Download the `AuthKey_XXXXXXXXXX.p8` file. Apple lets you download it only once.
 4. Note the **Key ID** shown next to the key and the **Issuer ID** shown above the list.
 
-## 4. Add the repository secrets
+## 4. Add the secrets to the release environment
 
-Add these at **Settings > Secrets and variables > Actions** in GitHub, or with `gh secret set`:
+The Release workflow runs its app job in an environment named `release`. Keep the secrets there instead of in the repository, so only runs from `main` can read them.
+
+1. Open **Settings > Environments > New environment** in GitHub and name it `release`.
+2. Under **Deployment branches and tags**, choose **Selected branches and tags** and add `main`.
+3. Add the secrets below to that environment, under **Environment secrets** or with the commands after the table.
 
 | Secret | Value |
 | --- | --- |
@@ -39,18 +43,18 @@ Add these at **Settings > Secrets and variables > Actions** in GitHub, or with `
 For example:
 
 ```sh
-base64 -i DeveloperID.p12 | gh secret set DEVELOPER_ID_P12
-gh secret set DEVELOPER_ID_P12_PASSWORD
-gh secret set NOTARY_KEY < AuthKey_XXXXXXXXXX.p8
-gh secret set NOTARY_KEY_ID --body XXXXXXXXXX
-gh secret set NOTARY_ISSUER_ID --body xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+base64 -i DeveloperID.p12 | gh secret set DEVELOPER_ID_P12 --env release
+gh secret set DEVELOPER_ID_P12_PASSWORD --env release
+gh secret set NOTARY_KEY --env release < AuthKey_XXXXXXXXXX.p8
+gh secret set NOTARY_KEY_ID --env release --body XXXXXXXXXX
+gh secret set NOTARY_ISSUER_ID --env release --body xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 Set all five or none. With only some of them, the workflow fails instead of shipping an unnotarized build.
 
 ## 5. Check the first notarized release
 
-Run the Release workflow by hand from the Actions tab, or wait for the next release. Then download the `.dmg` and check it:
+Run the Release workflow by hand on `main` from the Actions tab, or wait for the next release. Then download the `.dmg` and check it:
 
 ```sh
 spctl --assess --type open --context context:primary-signature -vv Afterhours-*.dmg
@@ -60,7 +64,13 @@ spctl --assess -vv /Applications/Afterhours.app
 
 The app check should say `accepted` and `source=Notarized Developer ID`.
 
-Once a notarized release is out, remove the Open Anyway step from `.github/release-install.md`, the Download section of `README.md`, and `apps/web/components/install-note.tsx`.
+The app has no entitlements file, and these paths have never run under the hardened runtime. Install the app from the `.dmg`, then try each one:
+
+- In **Settings > Power**, install and then uninstall lid-closed mode. It asks for an admin password through `NSAppleScript`.
+- Close the lid during a hold on battery. `pmset -g | grep -i disablesleep` should show `SleepDisabled 1`.
+- Open the menu and check that Limits shows Claude Code or Codex. That covers the `security` command. If you use Cursor, check it too, which covers `sqlite3`.
+
+Once a notarized release is out, remove the Open Anyway step from `.github/release-install.md`, the Download section of `README.md`, and `apps/web/components/install-note.tsx`. Then set the repository variable `REQUIRE_SIGNING` to `true` (`gh variable set REQUIRE_SIGNING --body true`), so a release with missing secrets fails instead of shipping unnotarized.
 
 ## Sign locally
 

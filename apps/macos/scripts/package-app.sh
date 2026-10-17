@@ -18,13 +18,17 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 notarize() {
-  local result id
-  result="$(xcrun notarytool submit "$1" --wait --output-format json \
-    --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")"
-  id="$(jq -r .id <<<"$result")"
-  if [[ "$(jq -r .status <<<"$result")" != "Accepted" ]]; then
+  local result id status
+  # notarytool can exit non-zero on a rejection, and the log is what explains it.
+  result="$(xcrun notarytool submit "$1" --wait --timeout 30m --output-format json \
+    --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")" || true
+  id="$(jq -r '.id // empty' <<<"$result" 2>/dev/null || true)"
+  status="$(jq -r '.status // empty' <<<"$result" 2>/dev/null || true)"
+  if [[ "$status" != "Accepted" ]]; then
     echo "Notarization of $1 failed: $result" >&2
-    xcrun notarytool log "$id" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" >&2
+    if [[ -n "$id" ]]; then
+      xcrun notarytool log "$id" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" >&2 || true
+    fi
     exit 1
   fi
   echo "Notarized $1 ($id)"
@@ -34,6 +38,10 @@ NOTARIZE=false
 if [[ -n "${NOTARY_KEY_ID:-}" ]]; then
   if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
     echo "Notarization needs an app signed with CODESIGN_IDENTITY." >&2
+    exit 1
+  fi
+  if [[ -z "${NOTARY_KEY_PATH:-}" || -z "${NOTARY_ISSUER_ID:-}" ]]; then
+    echo "Notarization needs NOTARY_KEY_PATH and NOTARY_ISSUER_ID too." >&2
     exit 1
   fi
   NOTARIZE=true
@@ -56,6 +64,16 @@ if [[ "$NOTARIZE" == true ]]; then
   codesign --sign "$CODESIGN_IDENTITY" --timestamp "$OUT/$NAME.dmg"
   notarize "$OUT/$NAME.dmg"
   xcrun stapler staple "$OUT/$NAME.dmg"
+  codesign --verify --strict --deep "$APP"
+  xcrun stapler validate "$APP"
+  xcrun stapler validate "$OUT/$NAME.dmg"
+  # Some CI images turn Gatekeeper's assessments off, and spctl then rejects everything.
+  if spctl --status 2>/dev/null | grep -q "assessments enabled"; then
+    spctl --assess --type execute -vv "$APP"
+    spctl --assess --type open --context context:primary-signature -vv "$OUT/$NAME.dmg"
+  else
+    echo "Gatekeeper assessments are off here, so spctl was skipped."
+  fi
 fi
 
 (cd "$OUT" && shasum -a 256 "$NAME.dmg" "$NAME.zip" > SHA256SUMS)
