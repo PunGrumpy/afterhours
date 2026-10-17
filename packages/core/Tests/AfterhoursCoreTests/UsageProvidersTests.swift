@@ -95,3 +95,9 @@ private let antigravityFixture = Data("""
     #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.network("offline"))))
     #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.decoding)))
 }
+
+@Test func antigravityRowKeepsItsEmailWhenTheExchangeFails() {
+    #expect(UsageLimits.antigravityLocation(email: "a@b.c", knownEmail: nil, fallback: "T3 Code") == "a@b.c")
+    #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: "a@b.c", fallback: "T3 Code") == "a@b.c")
+    #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: nil, fallback: "T3 Code") == "T3 Code")
+}

@@ -332,6 +332,11 @@ extension UsageLimits {
             .filter { FileManager.default.fileExists(atPath: $0.file.path) }
     }
 
+    /// The account's email when Google named it, now or at the last exchange, so the row keeps its identity offline.
+    static func antigravityLocation(email: String?, knownEmail: String?, fallback: String) -> String {
+        email ?? knownEmail ?? fallback
+    }
+
     private static func readAntigravity() async -> [UsageAccount] {
         let geminiHome = ProcessInfo.processInfo.environment["GEMINI_HOME"].flatMap {
             $0.isEmpty ? nil : URL(fileURLWithPath: $0)
@@ -343,8 +348,10 @@ extension UsageLimits {
                   let login = try? snakeCaseDecoder.decode(AntigravityLogin.self, from: data)
             else { continue }
             let session = await antigravitySession(login)
+            let knownEmail = antigravitySessions.withLock { $0[login.refreshToken]?.email }
+            let location = antigravityLocation(email: (try? session.get())?.email, knownEmail: knownEmail,
+                                               fallback: fallback)
             // One Google account signed in twice is one row.
-            let location = (try? session.get())?.email ?? fallback
             guard seen.insert(location).inserted else { continue }
             switch session {
             case .failure(let error):
