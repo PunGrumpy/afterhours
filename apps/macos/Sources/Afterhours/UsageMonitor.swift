@@ -8,6 +8,7 @@ final class UsageMonitor {
     private(set) var snapshot = UsageSnapshot()
     private(set) var checkedAt: Date?
     private(set) var refreshing = false
+    private var reading: Task<Void, Never>?
 
     var accounts: [UsageAccount] { snapshot.accounts }
 
@@ -21,9 +22,11 @@ final class UsageMonitor {
         guard !refreshing else { return }
         if let checkedAt, Date().timeIntervalSince(checkedAt) < minimumAge { return }
         refreshing = true
-        Task { [weak self] in
+        reading = Task { [weak self] in
             let fresh = await UsageLimits.read(claudeConfigDirectories: ClaudeHooks.configDirectories(), hubs: hubs)
             guard let self else { return }
+            // Limits was turned off mid-read, and `clear()` already reset the state.
+            guard !Task.isCancelled else { return }
             // A failed read keeps the last bars beside its message, so a flaky network doesn't blank them.
             let previousAccounts = accounts
             let merged = fresh.accounts.map { account in
@@ -46,6 +49,9 @@ final class UsageMonitor {
     }
 
     func clear() {
+        reading?.cancel()
+        reading = nil
+        refreshing = false
         snapshot = UsageSnapshot()
         checkedAt = nil
     }
