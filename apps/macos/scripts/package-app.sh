@@ -64,6 +64,16 @@ if [[ "$NOTARIZE" == true ]]; then
   codesign --sign "$CODESIGN_IDENTITY" --timestamp "$OUT/$NAME.dmg"
   notarize "$OUT/$NAME.dmg"
   xcrun stapler staple "$OUT/$NAME.dmg"
+  codesign --verify --strict --deep "$APP"
+  xcrun stapler validate "$APP"
+  xcrun stapler validate "$OUT/$NAME.dmg"
+  # Some CI images turn Gatekeeper's assessments off, and spctl then rejects everything.
+  if spctl --status 2>/dev/null | grep -q "assessments enabled"; then
+    spctl --assess --type execute -vv "$APP"
+    spctl --assess --type open --context context:primary-signature -vv "$OUT/$NAME.dmg"
+  else
+    echo "Gatekeeper assessments are off here, so spctl was skipped."
+  fi
 fi
 
 (cd "$OUT" && shasum -a 256 "$NAME.dmg" "$NAME.zip" > SHA256SUMS)
