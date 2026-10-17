@@ -86,3 +86,12 @@ private let antigravityFixture = Data("""
         .map { home.appendingPathComponent("\($0)/antigravity-acp/acp_token.json").path })
     #expect(logins.map(\.location).dropFirst() == ["T3 Code", "T3 Code"])
 }
+
+@Test func antigravityStopsAtTheFirstHostThatRejectsTheToken() {
+    #expect(!UsageLimits.antigravityTriesNextHost(after: .success(Data())))
+    #expect(!UsageLimits.antigravityTriesNextHost(after: .failure(.status(401))))
+    #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.status(403))))
+    #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.status(503))))
+    #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.network("offline"))))
+    #expect(UsageLimits.antigravityTriesNextHost(after: .failure(.decoding)))
+}

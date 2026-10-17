@@ -398,7 +398,15 @@ extension UsageLimits {
         }
     }
 
-    /// Answers with the first host that succeeds, or the last one's failure.
+    /// A rejected token is rejected on every host, so only other failures move on to the next one.
+    static func antigravityTriesNextHost(after result: Result<Data, FetchError>) -> Bool {
+        switch result {
+        case .success, .failure(.status(401)): false
+        case .failure: true
+        }
+    }
+
+    /// Answers with the first host that succeeds or rejects the token, or the last one's failure.
     private static func antigravityCall(_ operation: String, token: String,
                                         body: [String: String]) async -> Result<Data, FetchError> {
         var result: Result<Data, FetchError> = .failure(.network("Antigravity has no usage endpoint"))
@@ -411,7 +419,7 @@ extension UsageLimits {
             request.setValue(antigravityUserAgent, forHTTPHeaderField: "User-Agent")
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
             result = await send(request)
-            if case .success = result { break }
+            if !antigravityTriesNextHost(after: result) { break }
         }
         return result
     }
