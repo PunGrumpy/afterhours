@@ -8,6 +8,9 @@ final class UsageMonitor {
     private(set) var snapshot = UsageSnapshot()
     private(set) var checkedAt: Date?
     private(set) var refreshing = false
+    private var reading: Task<Void, Never>?
+    /// Hubs to read again once the current read ends, because Settings changed them mid-read.
+    private var pendingHubs: [UsageHub]?
 
     var accounts: [UsageAccount] { snapshot.accounts }
 
@@ -16,14 +19,20 @@ final class UsageMonitor {
     /// Between checks triggered by opening the menu.
     static let menuInterval: TimeInterval = 60
 
-    /// Skips when a reading younger than `minimumAge` exists or one is in flight.
+    /// Skips when a reading younger than `minimumAge` exists, and runs a forced one again after the read in flight.
     func refresh(hubs: [UsageHub], minimumAge: TimeInterval = interval) {
-        guard !refreshing else { return }
+        if refreshing {
+            // A forced refresh comes from a Settings change, which the read in flight doesn't include.
+            if minimumAge == 0 { pendingHubs = hubs }
+            return
+        }
         if let checkedAt, Date().timeIntervalSince(checkedAt) < minimumAge { return }
         refreshing = true
-        Task { [weak self] in
+        reading = Task { [weak self] in
             let fresh = await UsageLimits.read(claudeConfigDirectories: ClaudeHooks.configDirectories(), hubs: hubs)
             guard let self else { return }
+            // Limits was turned off mid-read, and `clear()` already reset the state.
+            guard !Task.isCancelled else { return }
             // A failed read keeps the last bars beside its message, so a flaky network doesn't blank them.
             let previousAccounts = accounts
             let merged = fresh.accounts.map { account in
@@ -36,6 +45,10 @@ final class UsageMonitor {
             snapshot = UsageSnapshot(accounts: merged, hubErrors: fresh.hubErrors)
             checkedAt = Date()
             refreshing = false
+            if let hubs = pendingHubs {
+                pendingHubs = nil
+                refresh(hubs: hubs, minimumAge: 0)
+            }
         }
     }
 
@@ -46,6 +59,10 @@ final class UsageMonitor {
     }
 
     func clear() {
+        reading?.cancel()
+        reading = nil
+        pendingHubs = nil
+        refreshing = false
         snapshot = UsageSnapshot()
         checkedAt = nil
     }
