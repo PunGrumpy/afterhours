@@ -1,5 +1,13 @@
 # @afterhours/macos
 
+## 0.3.2
+
+### Patch Changes
+
+- fffe9ef: Antigravity's limits stay on screen when your Mac briefly loses its connection, and a login Google rejects asks you to sign in again right away instead of failing for up to an hour.
+- f8635f7: Uninstalling lid-closed mode always lets your Mac sleep again, even if the sleep rule had stopped working, and Afterhours restarts its crash helper if it ever stops during a long hold.
+- f1d780a: Turning off Limits now stops any usage check already under way, a hub you add or remove in Settings shows up right away even while a check is running, and a server that stalls can no longer leave the menu stuck on "Checking…".
+
 ## 0.3.1
 
 ### Patch Changes
