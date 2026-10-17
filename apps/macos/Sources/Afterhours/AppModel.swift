@@ -305,12 +305,13 @@ final class AppModel {
             if LidControl.setSleepDisabled(wantLid) {
                 sleepDisabledByUs = wantLid
                 if lastError == Self.pmsetFailure { lastError = nil }
-                if wantLid { startSleepGuard() }
             } else {
                 lastError = Self.pmsetFailure
                 lidControlInstalled = LidControl.isInstalled
             }
         }
+        // The guard can fail to start or die mid-hold, and a crash then would leave sleep disabled.
+        if sleepDisabledByUs { startSleepGuard() }
 
         guard wasHolding != next.isHolding else { return }
         holdingSince = next.isHolding ? Date() : nil
