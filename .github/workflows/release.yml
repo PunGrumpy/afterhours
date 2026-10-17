@@ -100,8 +100,13 @@ jobs:
           NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          REQUIRE_SIGNING: ${{ vars.REQUIRE_SIGNING }}
         run: |
           if [[ -z "$DEVELOPER_ID_P12$DEVELOPER_ID_P12_PASSWORD$NOTARY_KEY$NOTARY_KEY_ID$NOTARY_ISSUER_ID" ]]; then
+            if [[ "$REQUIRE_SIGNING" == true ]]; then
+              echo "::error::REQUIRE_SIGNING is set, but the Developer ID secrets are missing."
+              exit 1
+            fi
             echo "::warning::No Developer ID secrets, so the app is signed ad-hoc and isn't notarized."
             exit 0
           fi
@@ -114,8 +119,8 @@ jobs:
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$keychain_password" "$keychain"
           base64 --decode <<<"$DEVELOPER_ID_P12" > "$RUNNER_TEMP/developer-id.p12"
+          trap 'rm -f "$RUNNER_TEMP/developer-id.p12"' EXIT
           security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
-          rm "$RUNNER_TEMP/developer-id.p12"
           # Lets codesign use the key without a prompt that would hang the runner.
           security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
@@ -149,3 +154,8 @@ jobs:
         run: curl --fail --silent --show-error --request POST "$DEPLOY_HOOK"
         env:
           DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary-key.p8" "$RUNNER_TEMP/developer-id.p12"
