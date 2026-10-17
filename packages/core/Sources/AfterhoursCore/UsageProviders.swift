@@ -332,6 +332,11 @@ extension UsageLimits {
             .filter { FileManager.default.fileExists(atPath: $0.file.path) }
     }
 
+    /// The account's email when Google named it, now or at the last exchange, so the row keeps its identity offline.
+    static func antigravityLocation(email: String?, knownEmail: String?, fallback: String) -> String {
+        email ?? knownEmail ?? fallback
+    }
+
     private static func readAntigravity() async -> [UsageAccount] {
         let geminiHome = ProcessInfo.processInfo.environment["GEMINI_HOME"].flatMap {
             $0.isEmpty ? nil : URL(fileURLWithPath: $0)
@@ -343,8 +348,10 @@ extension UsageLimits {
                   let login = try? snakeCaseDecoder.decode(AntigravityLogin.self, from: data)
             else { continue }
             let session = await antigravitySession(login)
+            let knownEmail = antigravitySessions.withLock { $0[login.refreshToken]?.email }
+            let location = antigravityLocation(email: (try? session.get())?.email, knownEmail: knownEmail,
+                                               fallback: fallback)
             // One Google account signed in twice is one row.
-            let location = (try? session.get())?.email ?? fallback
             guard seen.insert(location).inserted else { continue }
             switch session {
             case .failure(let error):
@@ -398,7 +405,15 @@ extension UsageLimits {
         }
     }
 
-    /// Answers with the first host that succeeds, or the last one's failure.
+    /// A rejected token is rejected on every host, so only other failures move on to the next one.
+    static func antigravityTriesNextHost(after result: Result<Data, FetchError>) -> Bool {
+        switch result {
+        case .success, .failure(.status(401)): false
+        case .failure: true
+        }
+    }
+
+    /// Answers with the first host that succeeds or rejects the token, or the last one's failure.
     private static func antigravityCall(_ operation: String, token: String,
                                         body: [String: String]) async -> Result<Data, FetchError> {
         var result: Result<Data, FetchError> = .failure(.network("Antigravity has no usage endpoint"))
@@ -411,7 +426,7 @@ extension UsageLimits {
             request.setValue(antigravityUserAgent, forHTTPHeaderField: "User-Agent")
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
             result = await send(request)
-            if case .success = result { break }
+            if !antigravityTriesNextHost(after: result) { break }
         }
         return result
     }
