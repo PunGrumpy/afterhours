@@ -125,8 +125,8 @@ enum LidControl {
     }
 
     static func uninstall() throws {
-        setSleepDisabled(false)
-        try runAsAdmin("/bin/rm -f \(sudoersPath)")
+        // Root needs no rule, so this works even when the rule is the broken thing being removed.
+        try runAsAdmin("set -e; /usr/bin/pmset -a disablesleep 0; /bin/rm -f \(sudoersPath)")
     }
 
     private static func runAsAdmin(_ shell: String) throws {
