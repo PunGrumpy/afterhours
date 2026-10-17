@@ -590,6 +590,8 @@ public enum UsageLimits {
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = timeout
+        // The request timeout resets on every byte, so a server that trickles one could hold the read for days.
+        configuration.timeoutIntervalForResource = 3 * timeout
         configuration.waitsForConnectivity = false
         return URLSession(configuration: configuration)
     }()
