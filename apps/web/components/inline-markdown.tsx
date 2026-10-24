@@ -1,4 +1,4 @@
-const TOKEN = /\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\)/gu;
+const TOKEN = /\*\*[^*]+\*\*|`[^`]+`|\[[^[\]]+\]\([^)\s]+\)/gu;
 const SAFE_URL = /^(?:https:\/\/|\/)/u;
 
 const renderToken = (token: string, key: string) => {
