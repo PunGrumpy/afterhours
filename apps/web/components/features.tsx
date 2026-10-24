@@ -90,6 +90,9 @@ export const Features = () => (
             <span className="font-medium">23% left</span>
             <span className="text-ink/60">Stops below 15%</span>
           </div>
+          <p className="text-ink/60 mt-1.5 text-[13px] tabular-nums">
+            About 25m until it sleeps at 15%
+          </p>
         </div>
       }
     >

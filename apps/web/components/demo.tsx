@@ -26,6 +26,7 @@ const START_MINUTES = 60 + 47;
 const AWAKE_FOR = 42;
 const BATTERY = 82;
 const CUTOFF = 15;
+const HOLD_MINUTES_LEFT = 185;
 
 const pick = (id: string) => {
   const agent = agents.find((a) => a.id === id);
@@ -450,6 +451,11 @@ const Menu = ({
           <span className="font-medium">{BATTERY}% left</span>
           <span className="text-white/45">Stops below {CUTOFF}%</span>
         </div>
+        {holding && (
+          <p className="mt-1 text-[12px] text-white/55 tabular-nums">
+            About {span(HOLD_MINUTES_LEFT)} until it sleeps at {CUTOFF}%
+          </p>
+        )}
       </section>
 
       <Divider />
