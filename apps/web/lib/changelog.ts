@@ -70,10 +70,12 @@ const parseRelease = (block: string): Release => {
       paragraph.push(line.trim());
     }
   }
+
   endParagraph();
 
   const titles = new Set(sections.map((section) => section.title));
   const tag = `@afterhours/macos@${version}`;
+
   return {
     sections,
     slug: version.replaceAll(".", "-"),
@@ -89,6 +91,7 @@ const readChangelog = () =>
 
 const releaseDates = async () => {
   const dates = new Map<string, string>();
+
   try {
     const response = await fetch(
       `https://api.github.com/repos/${repository}/releases?per_page=100`,
@@ -97,10 +100,13 @@ const releaseDates = async () => {
         headers: { Accept: "application/vnd.github+json" },
       }
     );
+
     if (!response.ok) {
       return dates;
     }
+
     const releases: GitHubRelease[] = await response.json();
+
     for (const { tag_name: tagName, published_at: publishedAt } of releases) {
       if (tagName && publishedAt) {
         dates.set(tagName.slice(tagName.lastIndexOf("@") + 1), publishedAt);
@@ -109,16 +115,19 @@ const releaseDates = async () => {
   } catch {
     return dates;
   }
+
   return dates;
 };
 
 export const getReleases = async (): Promise<Release[]> => {
   const dates = await releaseDates();
+
   return readChangelog()
     .split(VERSION_HEADING)
     .slice(1)
     .map((block) => {
       const release = parseRelease(block);
+
       return { ...release, date: dates.get(release.version) };
     });
 };
@@ -129,6 +138,8 @@ export const oneLine = (release: Release) => {
     release.sections[0]?.items[0] ??
     ""
   ).replaceAll(MARKDOWN_MARKS, "");
+
   const end = text.search(SENTENCE_END);
+
   return end === -1 ? text : text.slice(0, end + 1);
 };

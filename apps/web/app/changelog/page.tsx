@@ -21,17 +21,21 @@ const monthDay = new Intl.DateTimeFormat("en-US", {
 
 const byYear = (releases: Release[]) => {
   const groups: { year: string; releases: Release[] }[] = [];
+
   for (const release of releases) {
     const year = release.date
       ? String(new Date(release.date).getUTCFullYear())
       : "";
+
     const last = groups.at(-1);
+
     if (last?.year === year) {
       last.releases.push(release);
     } else {
       groups.push({ releases: [release], year });
     }
   }
+
   return groups;
 };
 

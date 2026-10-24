@@ -14,6 +14,7 @@ export const dynamicParams = false;
 
 export const generateStaticParams = async () => {
   const releases = await getReleases();
+
   return releases.map((release) => ({ version: release.slug }));
 };
 
@@ -22,6 +23,7 @@ export const generateMetadata = async ({
 }: PageProps<"/changelog/[version]">): Promise<Metadata> => {
   const [{ version }, releases] = await Promise.all([params, getReleases()]);
   const release = releases.find((item) => item.slug === version);
+
   return release
     ? {
         alternates: { canonical: `/changelog/${release.slug}` },
@@ -42,9 +44,11 @@ const Page = async ({ params }: PageProps<"/changelog/[version]">) => {
   const [{ version }, releases] = await Promise.all([params, getReleases()]);
   const index = releases.findIndex((item) => item.slug === version);
   const release = releases[index];
+
   if (!release) {
     notFound();
   }
+
   const newer = releases[index - 1];
   const older = releases[index + 1];
 
