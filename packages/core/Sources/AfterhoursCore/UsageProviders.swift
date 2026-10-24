@@ -89,6 +89,11 @@ extension UsageLimits {
         guard let yaml = try? String(contentsOf: config.appendingPathComponent("gh/hosts.yml"), encoding: .utf8) else {
             return nil
         }
+        return copilotToken(inHostsYAML: yaml)
+    }
+
+    /// Scans `gh`'s hosts file by indentation, taking only the token under the `github.com` key.
+    static func copilotToken(inHostsYAML yaml: String) -> String? {
         var inGitHub = false
         for line in yaml.split(separator: "\n") {
             if !line.hasPrefix(" ") { inGitHub = line.hasPrefix("github.com:") }
@@ -109,9 +114,13 @@ extension UsageLimits {
         request.setValue("GitHubCopilotChat/0.26.7", forHTTPHeaderField: "User-Agent")
         request.setValue("vscode/1.100.0", forHTTPHeaderField: "Editor-Version")
         request.setValue("copilot-chat/0.26.7", forHTTPHeaderField: "Editor-Plugin-Version")
+        return copilotAccount(await send(request))
+    }
+
+    static func copilotAccount(_ result: Result<Data, FetchError>) -> UsageAccount {
         let locations = ["github.com"]
         let body: [String: Any]
-        switch await send(request) {
+        switch result {
         case .failure(let error):
             return UsageAccount(provider: "copilot", plan: nil, locations: locations, windows: [],
                                 error: error.message(signIn: "Sign in to Copilot again"))

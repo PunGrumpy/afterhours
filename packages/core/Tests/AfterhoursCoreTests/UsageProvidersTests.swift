@@ -142,3 +142,89 @@ private let openCodeFixture = Data("""
     #expect(account?.windows.isEmpty == true)
     #expect(account?.error == "Couldn't read the usage response")
 }
+
+private let copilotFixture = Data("""
+    {"copilot_plan": "copilot_pro", "quota_reset_date": "2026-11-01",
+     "quota_snapshots": {
+       "premium_interactions": {"entitlement": 300, "remaining": 75},
+       "chat": {"unlimited": true, "entitlement": 0, "percent_remaining": 100},
+       "completions": {"percent_remaining": 40}}}
+    """.utf8)
+
+@Test func copilotAccountReadsEachBucketsUse() {
+    let account = UsageLimits.copilotAccount(.success(copilotFixture))
+    #expect(account.plan == "Copilot pro")
+    #expect(account.locations == ["github.com"])
+    #expect(account.windows.map(\.id) == ["premium_interactions", "completions"])
+    #expect(account.windows.map(\.label) == ["Credits", "Completions"])
+    #expect(account.windows.map(\.kind) == [.monthly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [75, 60])
+    #expect(account.windows.map(\.resetsAt) == [Date(timeIntervalSince1970: 1_793_491_200),
+                                                 Date(timeIntervalSince1970: 1_793_491_200)])
+    #expect(account.error == nil)
+}
+
+@Test func copilotAccountSkipsBucketsWithoutAnAllowance() {
+    let body = Data("""
+        {"quota_snapshots": {
+          "premium_interactions": {"entitlement": 0, "remaining": 0},
+          "chat": {"entitlement": -1, "remaining": -1, "percent_remaining": 100},
+          "completions": {"remaining": -1, "percent_remaining": 100}}}
+        """.utf8)
+    let account = UsageLimits.copilotAccount(.success(body))
+    #expect(account.windows.isEmpty)
+    #expect(account.plan == nil)
+    #expect(account.error == nil)
+}
+
+@Test func copilotAccountSkipsABucketItCannotMeasure() {
+    let body = Data(#"{"quota_snapshots": {"chat": {}, "completions": {"entitlement": 50, "remaining": 50}}}"#.utf8)
+    let account = UsageLimits.copilotAccount(.success(body))
+    #expect(account.windows.map(\.id) == ["completions"])
+    #expect(account.windows.map(\.usedPercent) == [0])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+}
+
+@Test func copilotAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.copilotAccount(.failure(.status(401)))
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Sign in to Copilot again")
+}
+
+@Test func copilotAccountReportsAnUnreadableBody() {
+    let account = UsageLimits.copilotAccount(.success(Data("[]".utf8)))
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Couldn't read the usage response")
+}
+
+@Test func copilotTokenComesFromTheGitHubComBlock() {
+    let yaml = """
+        github.com:
+            user: octocat
+            oauth_token: gho_fake
+            git_protocol: https
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: yaml) == "gho_fake")
+}
+
+@Test func copilotTokenIgnoresOtherHosts() {
+    let enterpriseOnly = """
+        ghe.example.com:
+            oauth_token: ghe_fake
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: enterpriseOnly) == nil)
+    let enterpriseFirst = """
+        ghe.example.com:
+            oauth_token: ghe_fake
+        github.com:
+            oauth_token: gho_fake
+        ghe.other.example:
+            oauth_token: ghe_other_fake
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: enterpriseFirst) == "gho_fake")
+}
+
+@Test func copilotTokenIsNilWithoutOne() {
+    #expect(UsageLimits.copilotToken(inHostsYAML: "github.com:\n    user: octocat\n") == nil)
+    #expect(UsageLimits.copilotToken(inHostsYAML: "") == nil)
+}
