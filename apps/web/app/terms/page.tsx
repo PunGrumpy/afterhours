@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 const Page = () => (
-  <LegalPage title="Terms of Service" updated="September 27, 2026">
+  <LegalPage title="Terms of Service" updated="October 24, 2026">
     <p>
       These terms cover the Afterhours app and this website. The source code is
       released under the{" "}
@@ -50,10 +50,10 @@ const Page = () => (
     <LegalSection title="Other services">
       <p>
         The Limits section reads your usage from Anthropic, OpenAI, GitHub,
-        Cursor, OpenCode, and xAI with the logins their tools already keep on
-        your Mac, through the endpoints those tools use. These aren&apos;t
-        public APIs, and they can change or stop working. Your use of each
-        service stays under that service&apos;s own terms.
+        Cursor, OpenCode, xAI, and Google with the logins their tools already
+        keep on your Mac, through the endpoints those tools use. These
+        aren&apos;t public APIs, and they can change or stop working. Your use
+        of each service stays under that service&apos;s own terms.
       </p>
       <p>
         Afterhours isn&apos;t made, endorsed, or supported by these companies,

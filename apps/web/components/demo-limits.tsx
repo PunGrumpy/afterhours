@@ -347,7 +347,7 @@ export const Limits = ({
                 </div>
                 <div className="flex flex-col gap-3 rounded-[10px] bg-white/[0.06] px-3 py-2.5">
                   {pool.windows.map((usage) => (
-                    <Bar key={usage.id} usage={usage} elapsed={elapsed} />
+                    <Bar key={usage.id} usage={usage} elapsed={elapsed % 30} />
                   ))}
                 </div>
               </div>
