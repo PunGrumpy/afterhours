@@ -101,3 +101,207 @@ private let antigravityFixture = Data("""
     #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: "a@b.c", fallback: "T3 Code") == "a@b.c")
     #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: nil, fallback: "T3 Code") == "T3 Code")
 }
+
+private let openCodeFixture = Data("""
+    {"usage": {
+      "rolling": {"percent": 12.5, "resetsAt": "2026-10-18T13:49:14Z"},
+      "weekly": {"percent": 40},
+      "monthly": {"percent": 0, "resetsAt": "2026-11-01T00:00:00Z"}}}
+    """.utf8)
+
+@Test func openCodeAccountReadsEachWindow() throws {
+    let account = try #require(UsageLimits.openCodeAccount(.success(openCodeFixture),
+                                                           locations: ["~/.local/share/opencode"]))
+    #expect(account.plan == "Go")
+    #expect(account.windows.map(\.id) == ["rolling", "weekly", "monthly"])
+    #expect(account.windows.map(\.kind) == [.session, .weekly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [12.5, 40, 0])
+    #expect(account.windows[0].resetsAt == Date(timeIntervalSince1970: 1_792_331_354))
+    #expect(account.windows[1].resetsAt == nil)
+    #expect(account.error == nil)
+}
+
+@Test func openCodeAccountDropsAWindowWithoutAPercent() throws {
+    let body = Data(#"{"usage": {"rolling": {"resetsAt": "2026-10-18T13:49:14Z"}, "weekly": {"percent": 40}}}"#.utf8)
+    let account = try #require(UsageLimits.openCodeAccount(.success(body), locations: []))
+    #expect(account.windows.map(\.id) == ["weekly"])
+}
+
+@Test func openCodeAccountIsHiddenWhenOnlyZenIsSignedIn() {
+    #expect(UsageLimits.openCodeAccount(.failure(.status(403)), locations: []) == nil)
+}
+
+@Test func openCodeAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.openCodeAccount(.failure(.status(401)), locations: ["~/.local/share/opencode"])
+    #expect(account?.windows.isEmpty == true)
+    #expect(account?.error == "Run opencode once to refresh its login")
+}
+
+@Test func openCodeAccountReportsAnUnreadableBody() {
+    let account = UsageLimits.openCodeAccount(.success(Data("{".utf8)), locations: [])
+    #expect(account?.windows.isEmpty == true)
+    #expect(account?.error == "Couldn't read the usage response")
+}
+
+private let copilotFixture = Data("""
+    {"copilot_plan": "copilot_pro", "quota_reset_date": "2026-11-01",
+     "quota_snapshots": {
+       "premium_interactions": {"entitlement": 300, "remaining": 75},
+       "chat": {"unlimited": true, "entitlement": 0, "percent_remaining": 100},
+       "completions": {"percent_remaining": 40}}}
+    """.utf8)
+
+@Test func copilotAccountReadsEachBucketsUse() {
+    let account = UsageLimits.copilotAccount(.success(copilotFixture))
+    #expect(account.plan == "Copilot pro")
+    #expect(account.locations == ["github.com"])
+    #expect(account.windows.map(\.id) == ["premium_interactions", "completions"])
+    #expect(account.windows.map(\.label) == ["Credits", "Completions"])
+    #expect(account.windows.map(\.kind) == [.monthly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [75, 60])
+    #expect(account.windows.map(\.resetsAt) == [Date(timeIntervalSince1970: 1_793_491_200),
+                                                 Date(timeIntervalSince1970: 1_793_491_200)])
+    #expect(account.error == nil)
+}
+
+@Test func copilotAccountSkipsBucketsWithoutAnAllowance() {
+    let body = Data("""
+        {"quota_snapshots": {
+          "premium_interactions": {"entitlement": 0, "remaining": 0},
+          "chat": {"entitlement": -1, "remaining": -1, "percent_remaining": 100},
+          "completions": {"remaining": -1, "percent_remaining": 100}}}
+        """.utf8)
+    let account = UsageLimits.copilotAccount(.success(body))
+    #expect(account.windows.isEmpty)
+    #expect(account.plan == nil)
+    #expect(account.error == nil)
+}
+
+@Test func copilotAccountSkipsABucketItCannotMeasure() {
+    let body = Data(#"{"quota_snapshots": {"chat": {}, "completions": {"entitlement": 50, "remaining": 50}}}"#.utf8)
+    let account = UsageLimits.copilotAccount(.success(body))
+    #expect(account.windows.map(\.id) == ["completions"])
+    #expect(account.windows.map(\.usedPercent) == [0])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+}
+
+@Test func copilotAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.copilotAccount(.failure(.status(401)))
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Sign in to Copilot again")
+}
+
+@Test func copilotAccountReportsAnUnreadableBody() {
+    let account = UsageLimits.copilotAccount(.success(Data("[]".utf8)))
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Couldn't read the usage response")
+}
+
+@Test func copilotTokenComesFromTheGitHubComBlock() {
+    let yaml = """
+        github.com:
+            user: octocat
+            oauth_token: gho_fake
+            git_protocol: https
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: yaml) == "gho_fake")
+}
+
+@Test func copilotTokenIgnoresOtherHosts() {
+    let enterpriseOnly = """
+        ghe.example.com:
+            oauth_token: ghe_fake
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: enterpriseOnly) == nil)
+    let enterpriseFirst = """
+        ghe.example.com:
+            oauth_token: ghe_fake
+        github.com:
+            oauth_token: gho_fake
+        ghe.other.example:
+            oauth_token: ghe_other_fake
+        """
+    #expect(UsageLimits.copilotToken(inHostsYAML: enterpriseFirst) == "gho_fake")
+}
+
+@Test func copilotTokenIsNilWithoutOne() {
+    #expect(UsageLimits.copilotToken(inHostsYAML: "github.com:\n    user: octocat\n") == nil)
+    #expect(UsageLimits.copilotToken(inHostsYAML: "") == nil)
+}
+
+private let cursorFixture = Data("""
+    {"billingCycleEnd": 1793491200000,
+     "planUsage": {"totalPercentUsed": 42.5, "autoPercentUsed": 10, "apiPercentUsed": 5}}
+    """.utf8)
+
+@Test func cursorAccountReadsEachPlanWindow() {
+    let account = UsageLimits.cursorAccount(.success(cursorFixture), plan: "Pro", location: "Cursor app")
+    #expect(account.plan == "Pro")
+    #expect(account.locations == ["Cursor app"])
+    #expect(account.windows.map(\.id) == ["total", "auto", "api"])
+    #expect(account.windows.map(\.label) == ["Plan", "Auto", "API"])
+    #expect(account.windows.map(\.kind) == [.monthly, .monthly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [42.5, 10, 5])
+    #expect(Set(account.windows.map(\.resetsAt)) == [Date(timeIntervalSince1970: 1_793_491_200)])
+    #expect(account.error == nil)
+}
+
+@Test func cursorAccountIgnoresACycleEndThatIsNotInTheFuture() {
+    let body = Data(#"{"billingCycleEnd": 0, "planUsage": {"totalPercentUsed": 42.5}}"#.utf8)
+    let account = UsageLimits.cursorAccount(.success(body), plan: nil, location: "Cursor app")
+    #expect(account.windows.map(\.id) == ["total"])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+}
+
+@Test func cursorAccountDropsAWindowWithoutAPercent() {
+    let body = Data(#"{"planUsage": {"totalPercentUsed": 42.5, "autoPercentUsed": 10}}"#.utf8)
+    let account = UsageLimits.cursorAccount(.success(body), plan: nil, location: "Cursor app")
+    #expect(account.windows.map(\.id) == ["total", "auto"])
+}
+
+@Test func cursorAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.cursorAccount(.failure(.status(403)), plan: "Pro", location: "~/.cursor/auth.json")
+    #expect(account.plan == "Pro")
+    #expect(account.locations == ["~/.cursor/auth.json"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Sign in to Cursor again")
+}
+
+@Test func grokAccountReadsAWeeklyPeriod() {
+    let body = Data("""
+        {"config": {"creditUsagePercent": 30,
+                    "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-10-18T13:49:14Z"}}}
+        """.utf8)
+    let account = UsageLimits.grokAccount(.success(body), locations: ["a@b.c"])
+    #expect(account.locations == ["a@b.c"])
+    #expect(account.windows.map(\.id) == ["credits"])
+    #expect(account.windows.map(\.kind) == [.weekly])
+    #expect(account.windows.map(\.label) == ["Weekly"])
+    #expect(account.windows.map(\.usedPercent) == [30])
+    #expect(account.windows.map(\.resetsAt) == [Date(timeIntervalSince1970: 1_792_331_354)])
+    #expect(account.error == nil)
+}
+
+@Test func grokAccountTreatsAnyOtherPeriodAsMonthly() {
+    let monthly = Data("""
+        {"config": {"creditUsagePercent": 5, "currentPeriod": {"type": "USAGE_PERIOD_TYPE_MONTHLY"}}}
+        """.utf8)
+    let account = UsageLimits.grokAccount(.success(monthly), locations: [])
+    #expect(account.windows.map(\.kind) == [.monthly])
+    #expect(account.windows.map(\.label) == ["Monthly"])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+    let unspecified = Data(#"{"config": {"creditUsagePercent": 5}}"#.utf8)
+    #expect(UsageLimits.grokAccount(.success(unspecified), locations: []).windows.map(\.kind) == [.monthly])
+}
+
+@Test func grokAccountHasNoWindowsWithoutACreditPercent() {
+    let account = UsageLimits.grokAccount(.success(Data(#"{"config": {}}"#.utf8)), locations: ["a@b.c"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == nil)
+}
+
+@Test func grokAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.grokAccount(.failure(.status(401)), locations: ["a@b.c"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Run grok login again")
+}

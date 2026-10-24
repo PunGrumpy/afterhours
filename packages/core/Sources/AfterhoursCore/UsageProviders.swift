@@ -48,8 +48,12 @@ extension UsageLimits {
               let go = auth["opencode-go"] as? [String: Any], go["type"] as? String == "api",
               let key = go["key"] as? String, !key.isEmpty
         else { return nil }
-        let locations = [shortPath(dataDir)]
-        switch await fetch(openCodeUsageURL, token: key, headers: [:]).flatMap({ decode(OpenCodeUsage.self, from: $0) }) {
+        return openCodeAccount(await fetch(openCodeUsageURL, token: key, headers: [:]), locations: [shortPath(dataDir)])
+    }
+
+    /// Nil when the key belongs to Zen without a Go subscription.
+    static func openCodeAccount(_ result: Result<Data, FetchError>, locations: [String]) -> UsageAccount? {
+        switch result.flatMap({ decode(OpenCodeUsage.self, from: $0) }) {
         case .failure(.status(403)):
             return nil  // Signed in to Zen, not to Go.
         case .failure(let error):
@@ -85,6 +89,11 @@ extension UsageLimits {
         guard let yaml = try? String(contentsOf: config.appendingPathComponent("gh/hosts.yml"), encoding: .utf8) else {
             return nil
         }
+        return copilotToken(inHostsYAML: yaml)
+    }
+
+    /// Scans `gh`'s hosts file by indentation, taking only the token under the `github.com` key.
+    static func copilotToken(inHostsYAML yaml: String) -> String? {
         var inGitHub = false
         for line in yaml.split(separator: "\n") {
             if !line.hasPrefix(" ") { inGitHub = line.hasPrefix("github.com:") }
@@ -105,9 +114,13 @@ extension UsageLimits {
         request.setValue("GitHubCopilotChat/0.26.7", forHTTPHeaderField: "User-Agent")
         request.setValue("vscode/1.100.0", forHTTPHeaderField: "Editor-Version")
         request.setValue("copilot-chat/0.26.7", forHTTPHeaderField: "Editor-Plugin-Version")
+        return copilotAccount(await send(request))
+    }
+
+    static func copilotAccount(_ result: Result<Data, FetchError>) -> UsageAccount {
         let locations = ["github.com"]
         let body: [String: Any]
-        switch await send(request) {
+        switch result {
         case .failure(let error):
             return UsageAccount(provider: "copilot", plan: nil, locations: locations, windows: [],
                                 error: error.message(signIn: "Sign in to Copilot again"))
@@ -203,9 +216,13 @@ extension UsageLimits {
         request.setValue("1", forHTTPHeaderField: "connect-protocol-version")
         request.setValue("cli", forHTTPHeaderField: "x-cursor-client-type")
         request.httpBody = Data("{}".utf8)
-        switch await send(request).flatMap({ decode(CursorUsage.self, from: $0) }) {
+        return cursorAccount(await send(request), plan: login.plan, location: login.location)
+    }
+
+    static func cursorAccount(_ result: Result<Data, FetchError>, plan: String?, location: String) -> UsageAccount {
+        switch result.flatMap({ decode(CursorUsage.self, from: $0) }) {
         case .failure(let error):
-            return UsageAccount(provider: "cursor", plan: login.plan, locations: [login.location], windows: [],
+            return UsageAccount(provider: "cursor", plan: plan, locations: [location], windows: [],
                                 error: error.message(signIn: "Sign in to Cursor again"))
         case .success(let usage):
             let resetsAt = usage.billingCycleEnd.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0 / 1000) : nil }
@@ -215,7 +232,7 @@ extension UsageLimits {
                 .compactMap { id, label, used in
                     used.map { UsageWindow(id: id, kind: .monthly, label: label, usedPercent: $0, resetsAt: resetsAt) }
                 }
-            return UsageAccount(provider: "cursor", plan: login.plan, locations: [login.location], windows: windows)
+            return UsageAccount(provider: "cursor", plan: plan, locations: [location], windows: windows)
         }
     }
 
@@ -244,7 +261,11 @@ extension UsageLimits {
             .first { ($0["auth_mode"] as? String) != "api_key" && ($0["key"] as? String)?.isEmpty == false }
         guard let key = entry?["key"] as? String else { return nil }
         let locations = [entry?["email"] as? String ?? shortPath(file)]
-        switch await fetch(grokBillingURL, token: key, headers: [:]).flatMap({ decode(GrokBilling.self, from: $0) }) {
+        return grokAccount(await fetch(grokBillingURL, token: key, headers: [:]), locations: locations)
+    }
+
+    static func grokAccount(_ result: Result<Data, FetchError>, locations: [String]) -> UsageAccount {
+        switch result.flatMap({ decode(GrokBilling.self, from: $0) }) {
         case .failure(let error):
             return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [],
                                 error: error.message(signIn: "Run grok login again"))
