@@ -92,10 +92,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-      - run: bun install --frozen-lockfile
+      - run: swift test --package-path packages/core
       - name: Import the Developer ID certificate
         env:
           DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
@@ -132,7 +129,7 @@ jobs:
           echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
           printf '%s\n' "$NOTARY_KEY" > "$RUNNER_TEMP/notary-key.p8"
           echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary-key.p8" >> "$GITHUB_ENV"
-      - run: bunx turbo run build --filter=@afterhours/macos
+      - run: ./apps/macos/scripts/build-app.sh
       - name: Publish the app and release notes
         env:
           GH_TOKEN: ${{ github.token }}
