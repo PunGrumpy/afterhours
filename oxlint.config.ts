@@ -12,6 +12,5 @@ export default defineConfig({
   extends: [core, react, next, nextJsPlugins, antiSlop, jsPlugins],
   ignorePatterns: core.ignorePatterns,
   jsPlugins: jsPlugins.jsPlugins,
-  rules: { "sonarjs/no-inconsistent-returns": "off" },
   settings: jsPluginSettings,
 });
