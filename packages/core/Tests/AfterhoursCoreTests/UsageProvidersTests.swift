@@ -228,3 +228,41 @@ private let copilotFixture = Data("""
     #expect(UsageLimits.copilotToken(inHostsYAML: "github.com:\n    user: octocat\n") == nil)
     #expect(UsageLimits.copilotToken(inHostsYAML: "") == nil)
 }
+
+private let cursorFixture = Data("""
+    {"billingCycleEnd": 1793491200000,
+     "planUsage": {"totalPercentUsed": 42.5, "autoPercentUsed": 10, "apiPercentUsed": 5}}
+    """.utf8)
+
+@Test func cursorAccountReadsEachPlanWindow() {
+    let account = UsageLimits.cursorAccount(.success(cursorFixture), plan: "Pro", location: "Cursor app")
+    #expect(account.plan == "Pro")
+    #expect(account.locations == ["Cursor app"])
+    #expect(account.windows.map(\.id) == ["total", "auto", "api"])
+    #expect(account.windows.map(\.label) == ["Plan", "Auto", "API"])
+    #expect(account.windows.map(\.kind) == [.monthly, .monthly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [42.5, 10, 5])
+    #expect(Set(account.windows.map(\.resetsAt)) == [Date(timeIntervalSince1970: 1_793_491_200)])
+    #expect(account.error == nil)
+}
+
+@Test func cursorAccountIgnoresACycleEndThatIsNotInTheFuture() {
+    let body = Data(#"{"billingCycleEnd": 0, "planUsage": {"totalPercentUsed": 42.5}}"#.utf8)
+    let account = UsageLimits.cursorAccount(.success(body), plan: nil, location: "Cursor app")
+    #expect(account.windows.map(\.id) == ["total"])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+}
+
+@Test func cursorAccountDropsAWindowWithoutAPercent() {
+    let body = Data(#"{"planUsage": {"totalPercentUsed": 42.5, "autoPercentUsed": 10}}"#.utf8)
+    let account = UsageLimits.cursorAccount(.success(body), plan: nil, location: "Cursor app")
+    #expect(account.windows.map(\.id) == ["total", "auto"])
+}
+
+@Test func cursorAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.cursorAccount(.failure(.status(403)), plan: "Pro", location: "~/.cursor/auth.json")
+    #expect(account.plan == "Pro")
+    #expect(account.locations == ["~/.cursor/auth.json"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Sign in to Cursor again")
+}

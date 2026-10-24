@@ -216,9 +216,13 @@ extension UsageLimits {
         request.setValue("1", forHTTPHeaderField: "connect-protocol-version")
         request.setValue("cli", forHTTPHeaderField: "x-cursor-client-type")
         request.httpBody = Data("{}".utf8)
-        switch await send(request).flatMap({ decode(CursorUsage.self, from: $0) }) {
+        return cursorAccount(await send(request), plan: login.plan, location: login.location)
+    }
+
+    static func cursorAccount(_ result: Result<Data, FetchError>, plan: String?, location: String) -> UsageAccount {
+        switch result.flatMap({ decode(CursorUsage.self, from: $0) }) {
         case .failure(let error):
-            return UsageAccount(provider: "cursor", plan: login.plan, locations: [login.location], windows: [],
+            return UsageAccount(provider: "cursor", plan: plan, locations: [location], windows: [],
                                 error: error.message(signIn: "Sign in to Cursor again"))
         case .success(let usage):
             let resetsAt = usage.billingCycleEnd.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0 / 1000) : nil }
@@ -228,7 +232,7 @@ extension UsageLimits {
                 .compactMap { id, label, used in
                     used.map { UsageWindow(id: id, kind: .monthly, label: label, usedPercent: $0, resetsAt: resetsAt) }
                 }
-            return UsageAccount(provider: "cursor", plan: login.plan, locations: [login.location], windows: windows)
+            return UsageAccount(provider: "cursor", plan: plan, locations: [location], windows: windows)
         }
     }
 
