@@ -43,6 +43,8 @@ final class AppModel {
     @ObservationIgnored private let busyInterval: TimeInterval = 4
     /// Between ticks with nothing to watch; a hook still wakes the loop at once through the sessions folder.
     @ObservationIgnored private let quietInterval: TimeInterval = 15
+    /// Between attempts to disable sleep after pmset fails, so a rule that doesn't apply isn't retried with a sudo spawn every tick.
+    @ObservationIgnored private let lidRetryInterval: TimeInterval = 60
     /// Kept as one value, so a later pmset success clears this message and no other.
     private static let pmsetFailure = "Couldn't run pmset. Reinstall lid-closed mode in Settings."
 
@@ -50,6 +52,7 @@ final class AppModel {
     @ObservationIgnored private var tracker = ActivityTracker()
     @ObservationIgnored private var lastWorkingAt: Date?
     @ObservationIgnored private var sleepDisabledByUs = false
+    @ObservationIgnored private var lidRetryAt: Date?
     @ObservationIgnored private var warnedLowBattery = false
     @ObservationIgnored private var hotKey: HotKey?
     @ObservationIgnored private var terminationSignals: [DispatchSourceSignal] = []
@@ -199,6 +202,7 @@ final class AppModel {
         }
         lidControlInstalled = LidControl.isInstalled
         sleepDisabledByUs = false
+        lidRetryAt = nil
         tick()
     }
 
@@ -305,14 +309,17 @@ final class AppModel {
         }
 
         let wantLid = next.isHolding && prefs.lidClosedMode && lidControlInstalled
+        let backingOff = wantLid && (lidRetryAt.map { $0 > Date() } ?? false)
         // Something else can turn it off under a hold, such as the guard of an Afterhours that quit a moment ago.
-        if wantLid != sleepDisabledByUs || (wantLid && !Power.sleepDisabled) {
+        if !backingOff, wantLid != sleepDisabledByUs || (wantLid && !Power.sleepDisabled) {
             if LidControl.setSleepDisabled(wantLid) {
                 sleepDisabledByUs = wantLid
+                lidRetryAt = nil
                 if lastError == Self.pmsetFailure { lastError = nil }
             } else {
                 lastError = Self.pmsetFailure
                 lidControlInstalled = LidControl.isInstalled
+                if wantLid { lidRetryAt = Date().addingTimeInterval(lidRetryInterval) }
             }
         }
         // The guard can fail to start or die mid-hold, and a crash then would leave sleep disabled.
