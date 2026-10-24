@@ -302,6 +302,7 @@ struct AddHubSheet: View {
     @State private var status: String?
     @State private var failed = false
     @State private var checking = false
+    @State private var check: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -324,14 +325,19 @@ struct AddHubSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(checking ? "Checking…" : "Add") { Task { await add() } }
+                Button("Cancel") {
+                    check?.cancel()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button(checking ? "Checking…" : "Add") { check = Task { await add() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(checking || url.trimmingCharacters(in: .whitespaces).isEmpty || key.isEmpty)
             }
         }
         .padding(20)
         .frame(width: 440)
+        .onDisappear { check?.cancel() }
     }
 
     private func add() async {
@@ -339,7 +345,9 @@ struct AddHubSheet: View {
         defer { checking = false }
         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        switch await UsageLimits.hubAccountCount(url: trimmedURL, managementKey: trimmedKey) {
+        let result = await UsageLimits.hubAccountCount(url: trimmedURL, managementKey: trimmedKey)
+        guard !Task.isCancelled else { return }
+        switch result {
         case .failure(let error):
             failed = true
             status = error.message
