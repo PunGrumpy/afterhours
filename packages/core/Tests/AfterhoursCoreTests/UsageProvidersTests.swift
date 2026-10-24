@@ -101,3 +101,44 @@ private let antigravityFixture = Data("""
     #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: "a@b.c", fallback: "T3 Code") == "a@b.c")
     #expect(UsageLimits.antigravityLocation(email: nil, knownEmail: nil, fallback: "T3 Code") == "T3 Code")
 }
+
+private let openCodeFixture = Data("""
+    {"usage": {
+      "rolling": {"percent": 12.5, "resetsAt": "2026-10-18T13:49:14Z"},
+      "weekly": {"percent": 40},
+      "monthly": {"percent": 0, "resetsAt": "2026-11-01T00:00:00Z"}}}
+    """.utf8)
+
+@Test func openCodeAccountReadsEachWindow() throws {
+    let account = try #require(UsageLimits.openCodeAccount(.success(openCodeFixture),
+                                                           locations: ["~/.local/share/opencode"]))
+    #expect(account.plan == "Go")
+    #expect(account.windows.map(\.id) == ["rolling", "weekly", "monthly"])
+    #expect(account.windows.map(\.kind) == [.session, .weekly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [12.5, 40, 0])
+    #expect(account.windows[0].resetsAt == Date(timeIntervalSince1970: 1_792_331_354))
+    #expect(account.windows[1].resetsAt == nil)
+    #expect(account.error == nil)
+}
+
+@Test func openCodeAccountDropsAWindowWithoutAPercent() throws {
+    let body = Data(#"{"usage": {"rolling": {"resetsAt": "2026-10-18T13:49:14Z"}, "weekly": {"percent": 40}}}"#.utf8)
+    let account = try #require(UsageLimits.openCodeAccount(.success(body), locations: []))
+    #expect(account.windows.map(\.id) == ["weekly"])
+}
+
+@Test func openCodeAccountIsHiddenWhenOnlyZenIsSignedIn() {
+    #expect(UsageLimits.openCodeAccount(.failure(.status(403)), locations: []) == nil)
+}
+
+@Test func openCodeAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.openCodeAccount(.failure(.status(401)), locations: ["~/.local/share/opencode"])
+    #expect(account?.windows.isEmpty == true)
+    #expect(account?.error == "Run opencode once to refresh its login")
+}
+
+@Test func openCodeAccountReportsAnUnreadableBody() {
+    let account = UsageLimits.openCodeAccount(.success(Data("{".utf8)), locations: [])
+    #expect(account?.windows.isEmpty == true)
+    #expect(account?.error == "Couldn't read the usage response")
+}

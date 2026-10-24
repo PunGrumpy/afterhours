@@ -48,8 +48,12 @@ extension UsageLimits {
               let go = auth["opencode-go"] as? [String: Any], go["type"] as? String == "api",
               let key = go["key"] as? String, !key.isEmpty
         else { return nil }
-        let locations = [shortPath(dataDir)]
-        switch await fetch(openCodeUsageURL, token: key, headers: [:]).flatMap({ decode(OpenCodeUsage.self, from: $0) }) {
+        return openCodeAccount(await fetch(openCodeUsageURL, token: key, headers: [:]), locations: [shortPath(dataDir)])
+    }
+
+    /// Nil when the key belongs to Zen without a Go subscription.
+    static func openCodeAccount(_ result: Result<Data, FetchError>, locations: [String]) -> UsageAccount? {
+        switch result.flatMap({ decode(OpenCodeUsage.self, from: $0) }) {
         case .failure(.status(403)):
             return nil  // Signed in to Zen, not to Go.
         case .failure(let error):
