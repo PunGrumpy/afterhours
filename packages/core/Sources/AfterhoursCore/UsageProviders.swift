@@ -261,7 +261,11 @@ extension UsageLimits {
             .first { ($0["auth_mode"] as? String) != "api_key" && ($0["key"] as? String)?.isEmpty == false }
         guard let key = entry?["key"] as? String else { return nil }
         let locations = [entry?["email"] as? String ?? shortPath(file)]
-        switch await fetch(grokBillingURL, token: key, headers: [:]).flatMap({ decode(GrokBilling.self, from: $0) }) {
+        return grokAccount(await fetch(grokBillingURL, token: key, headers: [:]), locations: locations)
+    }
+
+    static func grokAccount(_ result: Result<Data, FetchError>, locations: [String]) -> UsageAccount {
+        switch result.flatMap({ decode(GrokBilling.self, from: $0) }) {
         case .failure(let error):
             return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [],
                                 error: error.message(signIn: "Run grok login again"))

@@ -266,3 +266,42 @@ private let cursorFixture = Data("""
     #expect(account.windows.isEmpty)
     #expect(account.error == "Sign in to Cursor again")
 }
+
+@Test func grokAccountReadsAWeeklyPeriod() {
+    let body = Data("""
+        {"config": {"creditUsagePercent": 30,
+                    "currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-10-18T13:49:14Z"}}}
+        """.utf8)
+    let account = UsageLimits.grokAccount(.success(body), locations: ["a@b.c"])
+    #expect(account.locations == ["a@b.c"])
+    #expect(account.windows.map(\.id) == ["credits"])
+    #expect(account.windows.map(\.kind) == [.weekly])
+    #expect(account.windows.map(\.label) == ["Weekly"])
+    #expect(account.windows.map(\.usedPercent) == [30])
+    #expect(account.windows.map(\.resetsAt) == [Date(timeIntervalSince1970: 1_792_331_354)])
+    #expect(account.error == nil)
+}
+
+@Test func grokAccountTreatsAnyOtherPeriodAsMonthly() {
+    let monthly = Data("""
+        {"config": {"creditUsagePercent": 5, "currentPeriod": {"type": "USAGE_PERIOD_TYPE_MONTHLY"}}}
+        """.utf8)
+    let account = UsageLimits.grokAccount(.success(monthly), locations: [])
+    #expect(account.windows.map(\.kind) == [.monthly])
+    #expect(account.windows.map(\.label) == ["Monthly"])
+    #expect(account.windows.map(\.resetsAt) == [nil])
+    let unspecified = Data(#"{"config": {"creditUsagePercent": 5}}"#.utf8)
+    #expect(UsageLimits.grokAccount(.success(unspecified), locations: []).windows.map(\.kind) == [.monthly])
+}
+
+@Test func grokAccountHasNoWindowsWithoutACreditPercent() {
+    let account = UsageLimits.grokAccount(.success(Data(#"{"config": {}}"#.utf8)), locations: ["a@b.c"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == nil)
+}
+
+@Test func grokAccountAsksForSignInWhenRejected() {
+    let account = UsageLimits.grokAccount(.failure(.status(401)), locations: ["a@b.c"])
+    #expect(account.windows.isEmpty)
+    #expect(account.error == "Run grok login again")
+}
