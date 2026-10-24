@@ -55,9 +55,13 @@ const Page = async () => {
               key={group.year || "undated"}
               className="border-ink/[0.08] grid border-b md:grid-cols-[96px_minmax(0,1fr)] md:gap-x-6"
             >
-              <h2 className="text-ink/60 pt-4 text-[14px] tabular-nums max-md:pb-1">
-                {group.year}
-              </h2>
+              {group.year ? (
+                <h2 className="text-ink/60 pt-4 text-[14px] tabular-nums max-md:pb-1">
+                  {group.year}
+                </h2>
+              ) : (
+                <div aria-hidden="true" />
+              )}
               <ol>
                 {group.releases.map((release) => (
                   <li
