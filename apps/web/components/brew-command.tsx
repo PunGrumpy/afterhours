@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "cn";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { CheckIcon, CopyIcon } from "./icons";
 import { site } from "./site";
@@ -9,21 +9,18 @@ import { site } from "./site";
 export const BrewCommand = ({ className }: { className?: string }) => {
   const [copied, setCopied] = useState(false);
   const command = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-
-    const timer = setTimeout(() => setCopied(false), 1600);
-
-    return () => clearTimeout(timer);
-  }, [copied]);
+  const reset = useRef<ReturnType<typeof setTimeout>>(null);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(site.brew);
       setCopied(true);
+
+      if (reset.current) {
+        clearTimeout(reset.current);
+      }
+
+      reset.current = setTimeout(() => setCopied(false), 1600);
     } catch {
       if (command.current) {
         window.getSelection()?.selectAllChildren(command.current);
