@@ -39,7 +39,7 @@ final class AppModel {
     @ObservationIgnored private let stuckAfter: TimeInterval = 15 * 60
     /// Agents without hooks count as working for this long after their last CPU activity.
     @ObservationIgnored private let activeWindow: TimeInterval = 45
-    /// Between ticks while sessions are open or a hold is on, because CPU samples and wait deadlines need it.
+    /// Between ticks while a hold is on or sessions are open and Afterhours is watching, because CPU samples and wait deadlines need it.
     @ObservationIgnored private let busyInterval: TimeInterval = 4
     /// Between ticks with nothing to watch; a hook still wakes the loop at once through the sessions folder.
     @ObservationIgnored private let quietInterval: TimeInterval = 15
@@ -235,7 +235,12 @@ final class AppModel {
     }
 
     private var nextTickDelay: TimeInterval {
-        var delay = sessions.isEmpty && !state.isHolding ? quietInterval : busyInterval
+        var delay: TimeInterval
+        switch state {
+        case .disabled, .paused: delay = quietInterval
+        case .holding: delay = busyInterval
+        case .idle, .blocked: delay = sessions.isEmpty ? quietInterval : busyInterval
+        }
         if let pausedUntil { delay = min(delay, max(pausedUntil.timeIntervalSinceNow, 1)) }
         return delay
     }
