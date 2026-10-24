@@ -255,19 +255,14 @@ export const Limits = ({
 
   useEffect(() => {
     const scroller = menu.current;
-
-    if (!scroller) {
-      return;
-    }
-
     const halt = () => cancelAnimationFrame(frame.current);
-    scroller.addEventListener("wheel", halt, { passive: true });
-    scroller.addEventListener("touchstart", halt, { passive: true });
+    scroller?.addEventListener("wheel", halt, { passive: true });
+    scroller?.addEventListener("touchstart", halt, { passive: true });
 
     return () => {
       halt();
-      scroller.removeEventListener("wheel", halt);
-      scroller.removeEventListener("touchstart", halt);
+      scroller?.removeEventListener("wheel", halt);
+      scroller?.removeEventListener("touchstart", halt);
     };
   }, [menu]);
 

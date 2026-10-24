@@ -601,10 +601,6 @@ export const Demo = () => {
   useEffect(() => {
     const el = screen.current;
 
-    if (!el || !menuOpen) {
-      return;
-    }
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setMenuOpen(false);
@@ -612,9 +608,11 @@ export const Demo = () => {
       }
     };
 
-    el.addEventListener("keydown", onKeyDown);
+    if (menuOpen) {
+      el?.addEventListener("keydown", onKeyDown);
+    }
 
-    return () => el.removeEventListener("keydown", onKeyDown);
+    return () => el?.removeEventListener("keydown", onKeyDown);
   }, [menuOpen]);
 
   const working = list.filter((a) => a.state === "working");
