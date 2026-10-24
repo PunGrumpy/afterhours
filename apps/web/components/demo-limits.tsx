@@ -86,11 +86,13 @@ const rank: Record<Verdict, number> = { fine: 0, out: 2, tight: 1 };
 
 const worst = (segments: Segment[]) => {
   let verdict: Verdict = "fine";
+
   for (const { verdict: candidate } of segments) {
     if (rank[candidate] > rank[verdict]) {
       verdict = candidate;
     }
   }
+
   return verdict;
 };
 
@@ -102,15 +104,19 @@ const pooledLeft = (usage: UsageWindow) =>
 
 const countdown = (minutes: number) => {
   const left = Math.max(0, minutes);
+
   if (left === 0) {
     return "now";
   }
+
   if (left < 60) {
     return `in ${left}m`;
   }
+
   if (left < 1440) {
     return `in ${Math.floor(left / 60)}h ${left % 60}m`;
   }
+
   return `in ${Math.floor(left / 1440)}d ${Math.floor((left % 1440) / 60)}h`;
 };
 
@@ -167,6 +173,7 @@ const Badges = () => (
       const [fullest] = pool.windows.toSorted(
         (a, b) => pooledLeft(a) - pooledLeft(b)
       );
+
       return (
         <span key={pool.id} className="flex items-center gap-[5px]">
           <AgentLogo
@@ -184,6 +191,7 @@ const Badges = () => (
 
 const Bar = ({ usage, elapsed }: { usage: UsageWindow; elapsed: number }) => {
   const verdict = worst(usage.segments);
+
   const outlook =
     "runsOutIn" in usage.outlook
       ? `Runs out ${countdown(usage.outlook.runsOutIn - elapsed)}`
@@ -247,12 +255,15 @@ export const Limits = ({
 
   useEffect(() => {
     const scroller = menu.current;
+
     if (!scroller) {
       return;
     }
+
     const halt = () => cancelAnimationFrame(frame.current);
     scroller.addEventListener("wheel", halt, { passive: true });
     scroller.addEventListener("touchstart", halt, { passive: true });
+
     return () => {
       halt();
       scroller.removeEventListener("wheel", halt);
@@ -263,31 +274,41 @@ export const Limits = ({
   const reveal = () => {
     cancelAnimationFrame(frame.current);
     const scroller = menu.current;
+
     if (!scroller || !row.current || !body.current) {
       return;
     }
+
     const start = scroller.scrollTop;
+
     const end = Math.min(
       row.current.offsetTop - 10,
       scroller.scrollHeight + body.current.offsetHeight - scroller.clientHeight
     );
+
     if (end <= start) {
       return;
     }
+
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       frame.current = requestAnimationFrame(() => {
         scroller.scrollTop = end;
       });
+
       return;
     }
+
     const began = performance.now();
+
     const step = (time: number) => {
       const progress = Math.min(1, (time - began) / 300);
       scroller.scrollTop = start + (end - start) * settle(progress);
+
       if (progress < 1) {
         frame.current = requestAnimationFrame(step);
       }
     };
+
     frame.current = requestAnimationFrame(step);
   };
 
@@ -301,6 +322,7 @@ export const Limits = ({
         onClick={() => {
           cancelAnimationFrame(frame.current);
           onToggle();
+
           if (!expanded) {
             reveal();
           }

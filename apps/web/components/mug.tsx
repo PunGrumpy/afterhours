@@ -23,6 +23,7 @@ const Arc = ({
 }) => {
   const dx = r * Math.cos(0.15 * Math.PI);
   const dy = r * Math.sin(0.15 * Math.PI);
+
   return (
     <path
       d={`M${cx + dx} ${cy + dy}A${r} ${r} 0 0 1 ${cx - dx} ${cy + dy}`}
@@ -59,8 +60,10 @@ const Eye = ({
       />
     );
   }
+
   if (mood === "drowsy") {
     const dh = h * 0.45;
+
     return (
       <rect
         x={x - w / 2}
@@ -72,11 +75,14 @@ const Eye = ({
       />
     );
   }
+
   if (mood === "asleep") {
     return <Arc cx={x} cy={y - h * 0.1} r={h * 0.4} width={w * 0.6} />;
   }
+
   const s = h * 0.34;
   const d = left ? 1 : -1;
+
   return (
     <polyline
       points={`${x - s * d},${y - s} ${x + s * d},${y} ${x - s * d},${y + s}`}
@@ -103,6 +109,7 @@ export const Mug = ({
   const k = compact ? 1.3 : 1;
   const w = 8 * k;
   const h = 13 * k;
+
   const offset =
     mood === "awake" || mood === "drowsy"
       ? "translate(2.2 -1.5)"

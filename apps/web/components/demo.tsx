@@ -30,9 +30,11 @@ const HOLD_MINUTES_LEFT = 185;
 
 const pick = (id: string) => {
   const agent = agents.find((a) => a.id === id);
+
   if (!agent) {
     throw new Error(`Unknown agent: ${id}`);
   }
+
   return { id: agent.id, name: agent.name };
 };
 
@@ -63,6 +65,7 @@ const clock = (minutes: number) => {
   const h24 = Math.floor(minutes / 60) % 24;
   const h = h24 % 12 || 12;
   const suffix = h24 < 12 ? "AM" : "PM";
+
   return `${h}:${String(minutes % 60).padStart(2, "0")} ${suffix}`;
 };
 
@@ -80,12 +83,15 @@ const holdFor = ({
   if (!enabled) {
     return "disabled";
   }
+
   if (paused) {
     return "paused";
   }
+
   if (working) {
     return "working";
   }
+
   return waiting ? "waiting" : "idle";
 };
 
@@ -93,11 +99,14 @@ const useElapsedMinutes = () => {
   const [minutes, setMinutes] = useState(0);
   useEffect(() => {
     const start = Date.now();
+
     const id = setInterval(() => {
       setMinutes(Math.floor((Date.now() - start) / 60_000));
     }, 1000);
+
     return () => clearInterval(id);
   }, []);
+
   return minutes;
 };
 
@@ -164,9 +173,12 @@ const AgentStatus = ({ agent }: { agent: DemoAgent }) => {
   if (agent.state === "idle") {
     return <span className="text-white/45">Idle</span>;
   }
+
   const working = agent.state === "working";
+
   const sessions =
     agent.sessions === 1 ? "1 session" : `${agent.sessions} sessions`;
+
   return (
     <>
       <span className="text-white/55">{working ? sessions : "Needs you"}</span>
@@ -188,6 +200,7 @@ const AgentRow = ({
   onClick: () => void;
 }) => {
   const active = agent.state !== "idle";
+
   return (
     <button
       type="button"
@@ -525,6 +538,7 @@ const ClosedCard = ({
 }) => {
   const awake = hold === "working" || hold === "waiting";
   const plural = sessions === 1 ? "session" : "sessions";
+
   const copy: Record<Hold, [string, string]> = {
     disabled: [
       "Lid closed. Sleeping.",
@@ -547,6 +561,7 @@ const ClosedCard = ({
       `${sessions} ${plural} working · awake for ${span(AWAKE_FOR + elapsed)}`,
     ],
   };
+
   const [title, detail] = copy[hold];
 
   return (
@@ -585,22 +600,27 @@ export const Demo = () => {
 
   useEffect(() => {
     const el = screen.current;
+
     if (!el || !menuOpen) {
       return;
     }
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setMenuOpen(false);
         trigger.current?.focus();
       }
     };
+
     el.addEventListener("keydown", onKeyDown);
+
     return () => el.removeEventListener("keydown", onKeyDown);
   }, [menuOpen]);
 
   const working = list.filter((a) => a.state === "working");
   const sessions = working.reduce((sum, a) => sum + a.sessions, 0);
   const paused = pausedUntil !== null && pausedUntil > now;
+
   const hold = holdFor({
     enabled,
     paused,
@@ -635,8 +655,10 @@ export const Demo = () => {
       if (menuOpen) {
         reopenMenu.current = true;
       }
+
       setMenuOpen(false);
     }
+
     setLidClosed((closed) => !closed);
   };
 
@@ -663,6 +685,7 @@ export const Demo = () => {
                 ) {
                   return;
                 }
+
                 if (
                   e.propertyName === "transform" ||
                   e.propertyName === "opacity"

@@ -14,7 +14,9 @@ export const BrewCommand = ({ className }: { className?: string }) => {
     if (!copied) {
       return;
     }
+
     const timer = setTimeout(() => setCopied(false), 1600);
+
     return () => clearTimeout(timer);
   }, [copied]);
 
