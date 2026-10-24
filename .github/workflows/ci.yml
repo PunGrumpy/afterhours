@@ -15,6 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -52,6 +53,7 @@ jobs:
     needs: check
     if: needs.check.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -68,6 +70,7 @@ jobs:
     needs: check
     if: needs.check.outputs.macos == 'true'
     runs-on: macos-26
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:

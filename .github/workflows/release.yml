@@ -14,6 +14,7 @@ jobs:
   select-mode:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -36,6 +37,7 @@ jobs:
     needs: select-mode
     if: needs.select-mode.outputs.mode == 'version'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
@@ -57,6 +59,7 @@ jobs:
     needs: select-mode
     if: needs.select-mode.outputs.mode == 'publish'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     outputs:
@@ -81,7 +84,7 @@ jobs:
       !cancelled() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || contains(needs.publish.outputs.published-packages, '"@afterhours/macos"'))
     runs-on: macos-26
     environment: release
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
     steps:
