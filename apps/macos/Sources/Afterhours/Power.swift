@@ -135,6 +135,8 @@ enum LidControl {
         var error: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&error)
         if let error {
+            let userCanceledErr = -128
+            if error[NSAppleScript.errorNumber] as? Int == userCanceledErr { throw CancellationError() }
             throw NSError(domain: "Afterhours", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: error[NSAppleScript.errorMessage] as? String ?? "Admin command failed",
             ])

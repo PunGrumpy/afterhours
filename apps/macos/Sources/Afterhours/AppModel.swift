@@ -194,6 +194,7 @@ final class AppModel {
         do {
             try change()
             lastError = nil
+        } catch is CancellationError {
         } catch {
             lastError = error.localizedDescription
         }
