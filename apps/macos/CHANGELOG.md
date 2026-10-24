@@ -1,5 +1,12 @@
 # @afterhours/macos
 
+## 0.3.3
+
+### Patch Changes
+
+- 216bbbf: Cancelling the admin password prompt no longer leaves an error in the menu, and cancelling the Add hub sheet while it checks the hub no longer saves the hub or its key.
+- 428ac20: Afterhours wakes your Mac less often while it's turned off or paused, and when lid-closed mode can't run `pmset` it now waits a minute between attempts instead of trying every few seconds.
+
 ## 0.3.2
 
 ### Patch Changes
