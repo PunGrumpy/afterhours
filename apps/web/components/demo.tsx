@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "cn";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { AgentLogo } from "./agent-logo";
@@ -605,6 +605,11 @@ export const Demo = () => {
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
 
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    trigger.current?.focus();
+  }, []);
+
   useEffect(() => {
     const el = screen.current;
 
@@ -645,17 +650,33 @@ export const Demo = () => {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    const onFocusOut = (e: FocusEvent) => {
+      const { target, relatedTarget } = e;
+
+      if (
+        target instanceof Element &&
+        target.closest("[data-menu]") &&
+        relatedTarget instanceof Element &&
+        !relatedTarget.closest("[data-menu], [data-menu-trigger]")
+      ) {
         setMenuOpen(false);
-        trigger.current?.focus();
       }
     };
 
     if (menuOpen) {
       el?.addEventListener("keydown", onKeyDown);
+      el?.addEventListener("focusout", onFocusOut);
     }
 
-    return () => el?.removeEventListener("keydown", onKeyDown);
-  }, [menuOpen]);
+    return () => {
+      el?.removeEventListener("keydown", onKeyDown);
+      el?.removeEventListener("focusout", onFocusOut);
+    };
+  }, [menuOpen, closeMenu]);
 
   const working = list.filter((a) => a.state === "working");
   const sessions = working.reduce((sum, a) => sum + a.sessions, 0);
@@ -766,7 +787,7 @@ export const Demo = () => {
                       onPause={(minutes) => setPausedUntil(now + minutes)}
                       onResume={() => setPausedUntil(null)}
                       onCycle={cycle}
-                      onClose={() => setMenuOpen(false)}
+                      onClose={closeMenu}
                     />
                     <div
                       className="pointer-events-none absolute inset-0 z-30 bg-black opacity-0 transition-opacity duration-[900ms] ease-in-out data-[closed]:opacity-70 motion-reduce:duration-300"
