@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "cn";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { AgentLogo } from "./agent-logo";
@@ -237,12 +237,14 @@ const MenuBar = ({
   menuOpen,
   onToggleMenu,
   triggerRef,
+  pointerType,
 }: {
   mood: Mood;
   now: number;
   menuOpen: boolean;
   onToggleMenu: () => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
+  pointerType: RefObject<string>;
 }) => (
   <div className="relative z-10 flex h-8 items-center justify-between bg-black/20 px-3.5 text-[13px] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.25)]">
     <div className="flex items-center gap-4">
@@ -261,12 +263,12 @@ const MenuBar = ({
         ref={triggerRef}
         type="button"
         onPointerDown={(e) => {
-          if (e.button === 0) {
+          if (e.pointerType === "mouse" && e.button === 0) {
             onToggleMenu();
           }
         }}
         onClick={(e) => {
-          if (e.detail === 0) {
+          if (e.detail === 0 || pointerType.current !== "mouse") {
             onToggleMenu();
           }
         }}
@@ -593,6 +595,7 @@ export const Demo = () => {
   const [menuOpen, setMenuOpen] = useState(true);
   const trigger = useRef<HTMLButtonElement>(null);
   const screen = useRef<HTMLDivElement>(null);
+  const pointerType = useRef("mouse");
   const [lidClosed, setLidClosed] = useState(false);
   const reopenMenu = useRef(false);
   const [enabled, setEnabled] = useState(true);
@@ -602,22 +605,78 @@ export const Demo = () => {
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
 
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    trigger.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const el = screen.current;
+
+    const closeOnOutside = (target: EventTarget | null) => {
+      if (
+        target instanceof Element &&
+        !target.closest("[data-menu], [data-menu-trigger]")
+      ) {
+        setMenuOpen(false);
+      }
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      pointerType.current = e.pointerType;
+
+      if (e.pointerType === "mouse") {
+        closeOnOutside(e.target);
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (pointerType.current !== "mouse") {
+        closeOnOutside(e.target);
+      }
+    };
+
+    el?.addEventListener("pointerdown", onPointerDown, true);
+    el?.addEventListener("click", onClick);
+
+    return () => {
+      el?.removeEventListener("pointerdown", onPointerDown, true);
+      el?.removeEventListener("click", onClick);
+    };
+  }, []);
+
   useEffect(() => {
     const el = screen.current;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    const onFocusOut = (e: FocusEvent) => {
+      const { target, relatedTarget } = e;
+
+      if (
+        target instanceof Element &&
+        target.closest("[data-menu]") &&
+        relatedTarget instanceof Element &&
+        !relatedTarget.closest("[data-menu], [data-menu-trigger]")
+      ) {
         setMenuOpen(false);
-        trigger.current?.focus();
       }
     };
 
     if (menuOpen) {
       el?.addEventListener("keydown", onKeyDown);
+      el?.addEventListener("focusout", onFocusOut);
     }
 
-    return () => el?.removeEventListener("keydown", onKeyDown);
-  }, [menuOpen]);
+    return () => {
+      el?.removeEventListener("keydown", onKeyDown);
+      el?.removeEventListener("focusout", onFocusOut);
+    };
+  }, [menuOpen, closeMenu]);
 
   const working = list.filter((a) => a.state === "working");
   const sessions = working.reduce((sum, a) => sum + a.sessions, 0);
@@ -702,14 +761,6 @@ export const Demo = () => {
                   <div
                     ref={screen}
                     className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
-                    onPointerDown={(e) => {
-                      if (
-                        e.target instanceof Element &&
-                        !e.target.closest("[data-menu], [data-menu-trigger]")
-                      ) {
-                        setMenuOpen(false);
-                      }
-                    }}
                   >
                     <Wallpaper />
                     <Notch />
@@ -719,6 +770,7 @@ export const Demo = () => {
                       menuOpen={menuOpen}
                       onToggleMenu={() => setMenuOpen((open) => !open)}
                       triggerRef={trigger}
+                      pointerType={pointerType}
                     />
                     <Menu
                       open={menuOpen}
@@ -735,7 +787,7 @@ export const Demo = () => {
                       onPause={(minutes) => setPausedUntil(now + minutes)}
                       onResume={() => setPausedUntil(null)}
                       onCycle={cycle}
-                      onClose={() => setMenuOpen(false)}
+                      onClose={closeMenu}
                     />
                     <div
                       className="pointer-events-none absolute inset-0 z-30 bg-black opacity-0 transition-opacity duration-[900ms] ease-in-out data-[closed]:opacity-70 motion-reduce:duration-300"
@@ -773,7 +825,6 @@ export const Demo = () => {
         <button
           type="button"
           onClick={toggleLid}
-          aria-pressed={lidClosed}
           className={pill({ intent: "primary", size: "medium" })}
         >
           {lidClosed ? "Open the lid" : "Close the lid"}
