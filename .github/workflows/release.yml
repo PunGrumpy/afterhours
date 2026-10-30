@@ -54,6 +54,8 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          script: bun run version
 
   publish:
     needs: select-mode
