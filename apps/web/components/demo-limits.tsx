@@ -366,11 +366,13 @@ const PoolRow = ({
           {pool.name}
         </span>
         {pool.plan && (
-          <span className="text-[12px] text-white/45">{pool.plan}</span>
+          <span className="text-[12px] text-white/45 contrast-more:text-white/75">
+            {pool.plan}
+          </span>
         )}
         <Chevron
           className={cn(
-            "size-[9px] text-white/45 transition-transform duration-200 ease-out group-hover:text-white/55 motion-reduce:transition-none",
+            "size-[9px] text-white/45 transition-transform duration-200 ease-out group-hover:text-white/55 motion-reduce:transition-none contrast-more:text-white/75",
             { "rotate-90": open }
           )}
         />
@@ -378,7 +380,7 @@ const PoolRow = ({
           {open ? (
             <span
               key="where"
-              className="blur-in truncate text-[12px] text-white/45 tabular-nums"
+              className="blur-in truncate text-[12px] text-white/45 tabular-nums contrast-more:text-white/75"
             >
               {pool.accounts > 1 ? `${pool.accounts} accounts` : pool.where}
             </span>
@@ -513,13 +515,13 @@ export const Limits = ({
         <span className="text-[15px] font-bold">Limits</span>
         <Chevron
           className={cn(
-            "size-[11px] text-white/45 transition-transform duration-200 ease-out group-hover:text-white/55 motion-reduce:transition-none",
+            "size-[11px] text-white/45 transition-transform duration-200 ease-out group-hover:text-white/55 motion-reduce:transition-none contrast-more:text-white/75",
             { "rotate-90": expanded }
           )}
         />
         <span key={String(expanded)} className="blur-in ml-auto">
           {expanded ? (
-            <span className="text-[12px] text-white/45 tabular-nums">
+            <span className="text-[12px] text-white/45 tabular-nums contrast-more:text-white/75">
               As of {asOf}
             </span>
           ) : (
