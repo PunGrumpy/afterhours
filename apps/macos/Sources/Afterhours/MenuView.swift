@@ -222,19 +222,7 @@ struct MenuView: View, Themed {
                                 .foregroundStyle(palette.tertiaryText)
                         }
                     } else {
-                        let reasons = model.usage.snapshot.hubErrors
-                            + pools.filter(PoolRows.needsAttention).map { "\($0.name) needs attention" }
-                        HStack(spacing: 8) {
-                            if !reasons.isEmpty {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Palette.orange)
-                                    .help(reasons.joined(separator: "\n"))
-                                    .accessibilityLabel("Needs attention")
-                            }
-                            ForEach(pools) { PoolBadge(pool: $0) }
-                        }
-                        .fixedSize()
+                        LimitsSummary(pools: pools, hubErrors: model.usage.snapshot.hubErrors)
                     }
                 }
                 Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
@@ -465,7 +453,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
         Button { expanded.toggle() } label: {
             // Symbols at the title's font size sit on its baseline by design; the scale only shrinks the glyph.
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                SectionTitle(title)
+                SectionTitle(title).fixedSize()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 15, weight: .bold))
                     .imageScale(.small)
@@ -473,7 +461,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
-                trailing
+                trailing.layoutPriority(1)
             }
             .contentShape(Rectangle())
         }
@@ -503,6 +491,46 @@ private struct PoolBadge: View, Themed {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pool.spokenSummary)
+    }
+}
+
+/// Every badge when they fit, else the troubled providers first and a count for the rest, so the row never wraps.
+private struct LimitsSummary: View, Themed {
+    let pools: [ProviderPool]
+    let hubErrors: [String]
+    @Environment(\.colorSchemeContrast) var contrast
+
+    var body: some View {
+        let troubled = pools.filter(PoolRows.needsAttention)
+        let reasons = hubErrors + troubled.map { "\($0.name) needs attention" }
+        let byUrgency = troubled + pools.filter { !PoolRows.needsAttention($0) }
+        ViewThatFits(in: .horizontal) {
+            candidate(pools, hiding: [], reasons: reasons)
+            ForEach(Array((1..<max(pools.count, 1)).reversed()), id: \.self) { shown in
+                candidate(Array(byUrgency.prefix(shown)), hiding: Array(byUrgency.dropFirst(shown)), reasons: reasons)
+            }
+        }
+    }
+
+    private func candidate(_ shown: [ProviderPool], hiding hidden: [ProviderPool], reasons: [String]) -> some View {
+        HStack(spacing: 8) {
+            if !reasons.isEmpty {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.orange)
+                    .help(reasons.joined(separator: "\n"))
+                    .accessibilityLabel("Needs attention")
+            }
+            ForEach(shown) { PoolBadge(pool: $0) }
+            if !hidden.isEmpty {
+                Text("+\(hidden.count)")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(palette.tertiaryText)
+                    .help(hidden.map(\.name).joined(separator: "\n"))
+                    .accessibilityLabel("and \(hidden.count) more providers")
+            }
+        }
+        .fixedSize()
     }
 }
 
