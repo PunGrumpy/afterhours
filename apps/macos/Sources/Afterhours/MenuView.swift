@@ -222,9 +222,19 @@ struct MenuView: View, Themed {
                                 .foregroundStyle(palette.tertiaryText)
                         }
                     } else {
-                        HStack(spacing: 10) {
+                        let reasons = model.usage.snapshot.hubErrors
+                            + pools.filter(PoolRows.needsAttention).map { "\($0.name) needs attention" }
+                        HStack(spacing: 8) {
+                            if !reasons.isEmpty {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Palette.orange)
+                                    .help(reasons.joined(separator: "\n"))
+                                    .accessibilityLabel("Needs attention")
+                            }
                             ForEach(pools) { PoolBadge(pool: $0) }
                         }
+                        .fixedSize()
                     }
                 }
                 Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
@@ -459,7 +469,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
                     .imageScale(.small)
                     .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
-                Spacer()
+                Spacer(minLength: 0)
                 trailing
             }
             .contentShape(Rectangle())
