@@ -119,3 +119,38 @@ private func reason(working: Bool = false, hasSessions: Bool = true, lastWorking
     #expect(HoldPolicy.lastWorkingAt(previous: earlier, working: false, hasSessions: true, now: now) == earlier)
     #expect(HoldPolicy.lastWorkingAt(previous: earlier, working: false, hasSessions: false, now: now) == nil)
 }
+
+// MARK: - What gets announced
+
+private let until = now.addingTimeInterval(minutes(30))
+
+@Test func startingAHoldSpeaks() {
+    #expect(HoldPolicy.notice(from: .idle, to: .holding) == .started)
+    #expect(HoldPolicy.notice(from: .blocked("Your Mac is too hot"), to: .holding) == .started)
+}
+
+@Test func finishingAHoldSpeaks() {
+    #expect(HoldPolicy.notice(from: .holding, to: .idle) == .finished)
+}
+
+@Test func aSafetyRuleEndingAHoldSaysWhich() {
+    #expect(HoldPolicy.notice(from: .holding, to: .blocked("Battery is below 15%")) == .blocked("Battery is below 15%"))
+}
+
+@Test func yourOwnChangesStaySilent() {
+    let states: [HoldState] = [.idle, .holding, .blocked("Low Power Mode is on")]
+    for state in states {
+        #expect(HoldPolicy.notice(from: .disabled, to: state) == nil)
+        #expect(HoldPolicy.notice(from: state, to: .disabled) == nil)
+        #expect(HoldPolicy.notice(from: .paused(until: until), to: state) == nil)
+        #expect(HoldPolicy.notice(from: state, to: .paused(until: until)) == nil)
+    }
+    #expect(HoldPolicy.notice(from: .disabled, to: .paused(until: until)) == nil)
+}
+
+@Test func changesThatDoNotStartOrEndAHoldStaySilent() {
+    #expect(HoldPolicy.notice(from: .holding, to: .holding) == nil)
+    #expect(HoldPolicy.notice(from: .idle, to: .blocked("Your Mac isn't plugged in")) == nil)
+    #expect(HoldPolicy.notice(from: .blocked("Your Mac isn't plugged in"), to: .idle) == nil)
+    #expect(HoldPolicy.notice(from: .idle, to: .idle) == nil)
+}
