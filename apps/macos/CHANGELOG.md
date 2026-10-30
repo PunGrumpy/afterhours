@@ -1,5 +1,13 @@
 # @afterhours/macos
 
+## 0.3.4
+
+### Patch Changes
+
+- 64876d2: The example address in the Add hub sheet now looks like a hint instead of a link, so it no longer seems already filled in.
+- deffcf9: When Limits is collapsed, a warning triangle now shows that a provider is running low or a hub stopped answering, so you no longer have to tell orange from blue. VoiceOver also reads whether each limit is running out, and names the on/off switch, the menu bar icon and the Pause buttons.
+- aee5083: With Reduce Motion on, opening Limits no longer slides the rest of the menu down, and changes in the menu fade without blurring.
+
 ## 0.3.3
 
 ### Patch Changes
