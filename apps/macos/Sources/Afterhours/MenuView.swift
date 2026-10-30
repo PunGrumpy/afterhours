@@ -273,7 +273,9 @@ struct MenuView: View, Themed {
             } else {
                 HStack(spacing: 8) {
                     ChipButton(title: "30 min") { model.pause(minutes: 30) }
+                        .accessibilityLabel("Pause for 30 minutes")
                     ChipButton(title: "1 hour") { model.pause(minutes: 60) }
+                        .accessibilityLabel("Pause for 1 hour")
                 }
             }
         }
@@ -469,6 +471,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
                     .imageScale(.small)
                     .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 trailing
             }
@@ -476,7 +479,6 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
         }
         .buttonStyle(PressDim())
         .onHover { hovering = $0 }
-        .accessibilityAddTraits(.isButton)
         .accessibilityValue(expanded ? "Expanded" : "Collapsed")
     }
 }
@@ -589,6 +591,7 @@ private struct PoolRows: View, Themed {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .accessibilityHidden(true)
                     Spacer(minLength: 8)
                     summary
                 }
@@ -876,6 +879,7 @@ private struct MenuItem: View, Themed {
 private struct PillSwitch: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         PillSwitchBody(isOn: configuration.$isOn)
+            .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
     }
 }
 
@@ -903,7 +907,6 @@ private struct PillSwitchBody: View, Themed {
                 .animation(reduceMotion ? Motion.fade : Motion.knob, value: isOn)
         }
         .buttonStyle(PressScale())
-        .accessibilityValue(isOn ? "On" : "Off")
     }
 
     private var knob: some View {

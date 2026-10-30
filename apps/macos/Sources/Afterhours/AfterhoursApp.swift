@@ -68,11 +68,25 @@ struct AfterhoursApp: App {
         } label: {
             Image(nsImage: Mug.image(Mug.Mood(model.state)))
                 .accessibilityLabel("Afterhours")
+                .accessibilityValue(model.state.spokenName)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(model: model, prefs: model.prefs)
+        }
+    }
+}
+
+private extension HoldState {
+    /// What VoiceOver reads for the menu bar icon, which shows the state only as a mug.
+    var spokenName: String {
+        switch self {
+        case .holding: "Keeping your Mac awake"
+        case .idle: "Idle"
+        case .disabled: "Off"
+        case .paused: "Paused"
+        case .blocked: "Can't keep your Mac awake"
         }
     }
 }
