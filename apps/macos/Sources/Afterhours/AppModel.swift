@@ -211,7 +211,7 @@ final class AppModel {
 
     func tick() {
         let now = Date()
-        if let until = pausedUntil, until <= now { pausedUntil = nil }
+        if let until = pausedUntil, until <= now || !prefs.enabled { pausedUntil = nil }
         // An observed property notifies SwiftUI on every set, even an equal one, so unchanged values aren't written.
         let freshBattery = Power.battery()
         if freshBattery != battery { battery = freshBattery }
