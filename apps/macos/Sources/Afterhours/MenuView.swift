@@ -941,9 +941,10 @@ private struct MenuWindow: NSViewRepresentable {
 
 private struct BlurFade: ViewModifier {
     let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content.opacity(active ? 0 : 1).blur(radius: active ? 2 : 0)
+        content.opacity(active ? 0 : 1).blur(radius: active && !reduceMotion ? 2 : 0)
     }
 }
 
