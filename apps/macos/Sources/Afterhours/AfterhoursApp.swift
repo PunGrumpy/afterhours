@@ -67,8 +67,7 @@ struct AfterhoursApp: App {
             MenuView(model: model, prefs: model.prefs)
         } label: {
             Image(nsImage: Mug.image(Mug.Mood(model.state)))
-                .accessibilityLabel("Afterhours")
-                .accessibilityValue(model.state.spokenName)
+                .accessibilityLabel("Afterhours, \(model.state.spokenName.lowercasedFirst)")
         }
         .menuBarExtraStyle(.window)
 
@@ -76,6 +75,10 @@ struct AfterhoursApp: App {
             SettingsView(model: model, prefs: model.prefs)
         }
     }
+}
+
+private extension String {
+    var lowercasedFirst: String { prefix(1).lowercased() + dropFirst() }
 }
 
 private extension HoldState {

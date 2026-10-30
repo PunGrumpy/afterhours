@@ -268,15 +268,17 @@ struct MenuView: View, Themed {
         HStack {
             SectionTitle("Pause")
             Spacer()
-            if model.pausedUntil != nil {
+            switch model.state {
+            case .paused:
                 ChipButton(title: "Resume") { model.resume() }
-            } else {
+            default:
                 HStack(spacing: 8) {
                     ChipButton(title: "30 min") { model.pause(minutes: 30) }
                         .accessibilityLabel("Pause for 30 minutes")
                     ChipButton(title: "1 hour") { model.pause(minutes: 60) }
                         .accessibilityLabel("Pause for 1 hour")
                 }
+                .disabled(model.state == .disabled)
             }
         }
         .padding(.horizontal, 16)
@@ -825,12 +827,14 @@ private struct ChipButton: View, Themed {
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.colorSchemeContrast) var contrast
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
+                .opacity(isEnabled ? 1 : 0.45)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? palette.hoverFill : palette.fill))
