@@ -825,7 +825,6 @@ export const Demo = () => {
         <button
           type="button"
           onClick={toggleLid}
-          aria-pressed={lidClosed}
           className={pill({ intent: "primary", size: "medium" })}
         >
           {lidClosed ? "Open the lid" : "Close the lid"}
