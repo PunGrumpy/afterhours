@@ -237,12 +237,14 @@ const MenuBar = ({
   menuOpen,
   onToggleMenu,
   triggerRef,
+  pointerType,
 }: {
   mood: Mood;
   now: number;
   menuOpen: boolean;
   onToggleMenu: () => void;
   triggerRef: RefObject<HTMLButtonElement | null>;
+  pointerType: RefObject<string>;
 }) => (
   <div className="relative z-10 flex h-8 items-center justify-between bg-black/20 px-3.5 text-[13px] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.25)]">
     <div className="flex items-center gap-4">
@@ -261,12 +263,12 @@ const MenuBar = ({
         ref={triggerRef}
         type="button"
         onPointerDown={(e) => {
-          if (e.button === 0) {
+          if (e.pointerType === "mouse" && e.button === 0) {
             onToggleMenu();
           }
         }}
         onClick={(e) => {
-          if (e.detail === 0) {
+          if (e.detail === 0 || pointerType.current !== "mouse") {
             onToggleMenu();
           }
         }}
@@ -593,6 +595,7 @@ export const Demo = () => {
   const [menuOpen, setMenuOpen] = useState(true);
   const trigger = useRef<HTMLButtonElement>(null);
   const screen = useRef<HTMLDivElement>(null);
+  const pointerType = useRef("mouse");
   const [lidClosed, setLidClosed] = useState(false);
   const reopenMenu = useRef(false);
   const [enabled, setEnabled] = useState(true);
@@ -601,6 +604,41 @@ export const Demo = () => {
   const [limitsOpen, setLimitsOpen] = useState(false);
   const elapsed = useElapsedMinutes();
   const now = START_MINUTES + elapsed;
+
+  useEffect(() => {
+    const el = screen.current;
+
+    const closeOnOutside = (target: EventTarget | null) => {
+      if (
+        target instanceof Element &&
+        !target.closest("[data-menu], [data-menu-trigger]")
+      ) {
+        setMenuOpen(false);
+      }
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      pointerType.current = e.pointerType;
+
+      if (e.pointerType === "mouse") {
+        closeOnOutside(e.target);
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (pointerType.current !== "mouse") {
+        closeOnOutside(e.target);
+      }
+    };
+
+    el?.addEventListener("pointerdown", onPointerDown, true);
+    el?.addEventListener("click", onClick);
+
+    return () => {
+      el?.removeEventListener("pointerdown", onPointerDown, true);
+      el?.removeEventListener("click", onClick);
+    };
+  }, []);
 
   useEffect(() => {
     const el = screen.current;
@@ -702,14 +740,6 @@ export const Demo = () => {
                   <div
                     ref={screen}
                     className="relative h-[max(520px,62.4cqw)] overflow-hidden rounded-t-[1.25cqw] bg-[#12163a]"
-                    onPointerDown={(e) => {
-                      if (
-                        e.target instanceof Element &&
-                        !e.target.closest("[data-menu], [data-menu-trigger]")
-                      ) {
-                        setMenuOpen(false);
-                      }
-                    }}
                   >
                     <Wallpaper />
                     <Notch />
@@ -719,6 +749,7 @@ export const Demo = () => {
                       menuOpen={menuOpen}
                       onToggleMenu={() => setMenuOpen((open) => !open)}
                       triggerRef={trigger}
+                      pointerType={pointerType}
                     />
                     <Menu
                       open={menuOpen}
