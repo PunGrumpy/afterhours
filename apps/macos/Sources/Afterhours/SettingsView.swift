@@ -74,7 +74,7 @@ private struct GeneralTab: View {
                 SettingsToggle(title: "Turn Afterhours on or off with ⌥⌘L", isOn: $prefs.hotKeyEnabled)
             } footer: {
                 if let error {
-                    Text(error).foregroundStyle(.red)
+                    SettingsError(message: error)
                 } else if !prefs.showInMenuBar {
                     Text("Open Afterhours again from Applications or Spotlight to get back here.")
                 }
@@ -117,14 +117,20 @@ private struct PowerTab: View {
             SettingsSection("Lid") {
                 SettingsToggle(title: "Keep awake with the lid closed", isOn: $prefs.lidClosedMode)
                 SettingsRow("Lid-closed mode on battery") {
-                    if model.lidControlInstalled {
-                        Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        Button("Uninstall") { model.uninstallLidControl() }
-                    } else {
+                    if !model.lidControlInstalled {
                         Button("Install…") { model.installLidControl() }
+                    } else if model.lidError == nil {
+                        Label { Text("Installed") } icon: {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        }
+                        Button("Uninstall…") { model.uninstallLidControl() }
+                    } else {
+                        Button("Reinstall…") { model.installLidControl() }
+                        Button("Uninstall…") { model.uninstallLidControl() }
                     }
                 }
             } footer: {
+                if let error = model.lidError { SettingsError(message: error) }
                 Text("Plugged in, a closed Mac stays awake without this. On battery, macOS ignores keep-awake requests once the lid closes, so installing adds a sudoers rule that lets Afterhours run only `pmset -a disablesleep 0` and `pmset -a disablesleep 1`. macOS asks for an admin password once.")
             }
 
@@ -201,7 +207,7 @@ private struct AgentsTab: View {
                 }
                 .id(refresh)
             } footer: {
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { SettingsError(message: error) }
                 Text("Hooks tell Afterhours when Claude Code is working, waiting for you, or idle. Restart open Claude Code sessions after installing. A copy of the previous file is kept as `settings.json.afterhours-backup`.")
             }
 
@@ -319,10 +325,12 @@ struct AddHubSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 if let status {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(failed ? .red : .secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        if failed { SettingsError(message: status) } else { Text(status) }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Button("Cancel") {

@@ -66,6 +66,17 @@ extension View {
     }
 }
 
+/// An error in a Settings footer: a red symbol and plain text, so it reads in both appearances.
+struct SettingsError: View {
+    let message: String
+
+    var body: some View {
+        Label { Text(message) } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        }
+    }
+}
+
 /// A switch that says on or off with its knob, not only its color.
 struct SettingsToggle: View {
     let title: String
