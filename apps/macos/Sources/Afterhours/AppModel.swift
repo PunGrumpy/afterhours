@@ -113,7 +113,7 @@ final class AppModel {
     }
 
     /// A model with sample state and no side effects, for rendering the menu outside the app.
-    init(preview: Preferences) {
+    init(preview: Preferences, crowded: Bool = false) {
         prefs = preview
         state = .holding
         holdingSince = Date().addingTimeInterval(-83 * 60)
@@ -124,10 +124,10 @@ final class AppModel {
             AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
             AgentSession(agentId: "codex", agentName: "Codex", state: .idle),
         ]
-        usage.seed(Self.sampleUsage)
+        usage.seed(Self.sampleUsage(crowded: crowded))
     }
 
-    private static var sampleUsage: UsageSnapshot {
+    private static func sampleUsage(crowded: Bool) -> UsageSnapshot {
         let now = Date()
         func window(_ id: String, _ kind: UsageWindow.Kind, _ label: String, _ used: Double, hours: Double) -> UsageWindow {
             UsageWindow(id: id, kind: kind, label: label, usedPercent: used, resetsAt: now.addingTimeInterval(hours * 3600))
@@ -140,7 +140,7 @@ final class AppModel {
                 window("seven_day_fable", .weekly, "Weekly · Fable", fable, hours: 20 + hours),
             ])
         }
-        return UsageSnapshot(accounts: [
+        var accounts = [
             claude(["~/.claude", "~/.claude-nipa"], 2, 70, 100, hours: 1.3),
             claude(["~/.claude-pun"], 8, 50, 58, hours: 2.1),
             claude(["team@example.com"], source: "Thaipass", 60, 91, 72, hours: 4.0),
@@ -154,7 +154,24 @@ final class AppModel {
                 window("3p-weekly", .weekly, "Weekly · Claude & GPT", 0, hours: 167),
                 window("3p-5h", .session, "Session · Claude & GPT", 0, hours: 5),
             ]),
-        ], hubErrors: ["Spare hub: The hub rejected the management key"])
+        ]
+        if crowded {
+            accounts += [
+                UsageAccount(provider: "opencode", plan: "Zen", locations: ["~/.local/share/opencode"], windows: [
+                    window("month", .weekly, "Monthly", 41, hours: 300),
+                ]),
+                UsageAccount(provider: "cursor", plan: "Pro", locations: ["~/.cursor"], windows: [
+                    window("plan", .weekly, "Plan", 58, hours: 120),
+                ]),
+                UsageAccount(provider: "copilot", plan: "Pro", locations: ["~/.config/github-copilot"], windows: [
+                    window("premium", .weekly, "Premium requests", 85, hours: 200),
+                ]),
+                UsageAccount(provider: "grok", plan: "SuperGrok", locations: ["you@example.com"], windows: [
+                    window("session", .session, "Session", 100, hours: 2.5),
+                ]),
+            ]
+        }
+        return UsageSnapshot(accounts: accounts, hubErrors: ["Spare hub: The hub rejected the management key"])
     }
 
     // MARK: - Actions
