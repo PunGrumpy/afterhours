@@ -6,11 +6,13 @@ import AppKit
 enum Mug {
     enum Mood {
         case awake, asleep, drowsy, alarmed
+        case off
 
         init(_ state: HoldState) {
             switch state {
             case .holding: self = .awake
-            case .idle, .disabled: self = .asleep
+            case .idle: self = .asleep
+            case .disabled: self = .off
             case .paused: self = .drowsy
             case .blocked: self = .alarmed
             }
@@ -20,7 +22,7 @@ enum Mug {
             switch self {
             case .awake: 2
             case .drowsy: 1
-            case .asleep, .alarmed: 0
+            case .asleep, .alarmed, .off: 0
             }
         }
 
@@ -28,7 +30,7 @@ enum Mug {
         var opticalOffset: CGPoint {
             switch self {
             case .awake, .drowsy: CGPoint(x: 0.022, y: -0.015)
-            case .asleep, .alarmed: CGPoint(x: 0.021, y: -0.13)
+            case .asleep, .alarmed, .off: CGPoint(x: 0.021, y: -0.13)
             }
         }
     }
@@ -38,6 +40,8 @@ enum Mug {
         let compact = size <= 20
         let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            // Off dims the sleeping mug like an unavailable menu item; the template mask keeps the alpha.
+            if mood == .off { ctx.setAlpha(0.45) }
             ctx.beginTransparencyLayer(auxiliaryInfo: nil)
             ctx.scaleBy(x: size, y: size)
             ctx.translateBy(x: mood.opticalOffset.x, y: mood.opticalOffset.y)
@@ -80,7 +84,7 @@ enum Mug {
                     pill(ctx, center: eye, width: w, height: h)
                 case .drowsy:
                     pill(ctx, center: CGPoint(x: eye.x, y: eye.y + h * 0.25), width: w, height: h * 0.45)
-                case .asleep:
+                case .asleep, .off:
                     arc(ctx, center: CGPoint(x: eye.x, y: eye.y - h * 0.1), radius: h * 0.4, lineWidth: w * 0.6)
                 case .alarmed:
                     let s = h * 0.34
