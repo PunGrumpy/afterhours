@@ -222,9 +222,19 @@ struct MenuView: View, Themed {
                                 .foregroundStyle(palette.tertiaryText)
                         }
                     } else {
-                        HStack(spacing: 10) {
+                        let reasons = model.usage.snapshot.hubErrors
+                            + pools.filter(PoolRows.needsAttention).map { "\($0.name) needs attention" }
+                        HStack(spacing: 8) {
+                            if !reasons.isEmpty {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Palette.orange)
+                                    .help(reasons.joined(separator: "\n"))
+                                    .accessibilityLabel("Needs attention")
+                            }
                             ForEach(pools) { PoolBadge(pool: $0) }
                         }
+                        .fixedSize()
                     }
                 }
                 Collapsible(expanded: prefs.limitsExpanded, reduceMotion: reduceMotion) {
@@ -263,7 +273,9 @@ struct MenuView: View, Themed {
             } else {
                 HStack(spacing: 8) {
                     ChipButton(title: "30 min") { model.pause(minutes: 30) }
+                        .accessibilityLabel("Pause for 30 minutes")
                     ChipButton(title: "1 hour") { model.pause(minutes: 60) }
+                        .accessibilityLabel("Pause for 1 hour")
                 }
             }
         }
@@ -459,14 +471,14 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
                     .imageScale(.small)
                     .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
-                Spacer()
+                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
                 trailing
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(PressDim())
         .onHover { hovering = $0 }
-        .accessibilityAddTraits(.isButton)
         .accessibilityValue(expanded ? "Expanded" : "Collapsed")
     }
 }
@@ -490,12 +502,7 @@ private struct PoolBadge: View, Themed {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-    }
-
-    private var label: String {
-        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
-        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
+        .accessibilityLabel(pool.spokenSummary)
     }
 }
 
@@ -529,6 +536,21 @@ private enum UsageColor {
     /// The worst account decides the pool's color.
     static func verdict(_ window: ProviderPool.Window, now: Date) -> Verdict {
         window.segments.compactMap { $0.map { verdict($0, now: now) } }.max() ?? .fine
+    }
+}
+
+private extension ProviderPool {
+    /// What VoiceOver reads for the provider, with the same verdict the colors show.
+    var spokenSummary: String {
+        guard let worst = fullest else { return "\(name): unavailable" }
+        var text = "\(name): \(worst.label) \(worst.leftPercent)% left"
+        switch UsageColor.verdict(worst, now: Date()) {
+        case .fine: break
+        case .tight: text += ", running low"
+        case .out: text += ", running out"
+        }
+        if !errors.isEmpty { text += ", an account couldn't be read" }
+        return text
     }
 }
 
@@ -569,6 +591,7 @@ private struct PoolRows: View, Themed {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .accessibilityHidden(true)
                     Spacer(minLength: 8)
                     summary
                 }
@@ -576,7 +599,7 @@ private struct PoolRows: View, Themed {
             }
             .buttonStyle(PressDim())
             .onHover { hovering = $0 }
-            .accessibilityLabel(accessibilityLabel)
+            .accessibilityLabel(pool.spokenSummary)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             Collapsible(expanded: expanded, reduceMotion: reduceMotion) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -647,11 +670,6 @@ private struct PoolRows: View, Themed {
             }
             .transition(.blurFade)
         }
-    }
-
-    private var accessibilityLabel: String {
-        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
-        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
     }
 }
 
@@ -861,6 +879,7 @@ private struct MenuItem: View, Themed {
 private struct PillSwitch: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         PillSwitchBody(isOn: configuration.$isOn)
+            .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
     }
 }
 
@@ -888,7 +907,6 @@ private struct PillSwitchBody: View, Themed {
                 .animation(reduceMotion ? Motion.fade : Motion.knob, value: isOn)
         }
         .buttonStyle(PressScale())
-        .accessibilityValue(isOn ? "On" : "Off")
     }
 
     private var knob: some View {
