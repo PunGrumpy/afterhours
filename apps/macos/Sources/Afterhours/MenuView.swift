@@ -500,12 +500,7 @@ private struct PoolBadge: View, Themed {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-    }
-
-    private var label: String {
-        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
-        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
+        .accessibilityLabel(pool.spokenSummary)
     }
 }
 
@@ -539,6 +534,21 @@ private enum UsageColor {
     /// The worst account decides the pool's color.
     static func verdict(_ window: ProviderPool.Window, now: Date) -> Verdict {
         window.segments.compactMap { $0.map { verdict($0, now: now) } }.max() ?? .fine
+    }
+}
+
+private extension ProviderPool {
+    /// What VoiceOver reads for the provider, with the same verdict the colors show.
+    var spokenSummary: String {
+        guard let worst = fullest else { return "\(name): unavailable" }
+        var text = "\(name): \(worst.label) \(worst.leftPercent)% left"
+        switch UsageColor.verdict(worst, now: Date()) {
+        case .fine: break
+        case .tight: text += ", running low"
+        case .out: text += ", running out"
+        }
+        if !errors.isEmpty { text += ", an account couldn't be read" }
+        return text
     }
 }
 
@@ -586,7 +596,7 @@ private struct PoolRows: View, Themed {
             }
             .buttonStyle(PressDim())
             .onHover { hovering = $0 }
-            .accessibilityLabel(accessibilityLabel)
+            .accessibilityLabel(pool.spokenSummary)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             Collapsible(expanded: expanded, reduceMotion: reduceMotion) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -657,11 +667,6 @@ private struct PoolRows: View, Themed {
             }
             .transition(.blurFade)
         }
-    }
-
-    private var accessibilityLabel: String {
-        guard let worst = pool.fullest else { return "\(pool.name): unavailable" }
-        return "\(pool.name): \(worst.label) \(worst.leftPercent)% left"
     }
 }
 
