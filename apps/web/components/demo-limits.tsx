@@ -44,8 +44,8 @@ const pools: Pool[] = [
         outlook: { runsOutIn: 38 },
         resetsIn: 77,
         segments: [
-          { left: 64, verdict: "fine" },
-          { left: 21, pace: 0.62, verdict: "out" },
+          { left: 40, verdict: "fine" },
+          { left: 9, pace: 0.62, verdict: "out" },
         ],
       },
       {
@@ -138,6 +138,18 @@ const fullestWindow = (pool: Pool) => {
 const needsAttention = (pool: Pool) =>
   pool.windows.some((usage) => worst(usage.segments) !== "fine");
 
+const spokenSummary = (pool: Pool) => {
+  const fullest = fullestWindow(pool);
+  const verdict = worst(fullest.segments);
+  const text = `${pool.name}: ${fullest.label} ${pooledLeft(fullest)}% left`;
+
+  if (verdict === "tight") {
+    return `${text}, running low`;
+  }
+
+  return verdict === "out" ? `${text}, running out` : text;
+};
+
 const countdown = (minutes: number) => {
   const left = Math.max(0, minutes);
 
@@ -206,25 +218,56 @@ const Chevron = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const Badges = () => (
-  <span aria-hidden="true" className="flex shrink-0 items-center gap-2">
-    {pools.map((pool) => {
-      const fullest = fullestWindow(pool);
-
-      return (
-        <span key={pool.id} className="flex items-center gap-[5px]">
-          <AgentLogo
-            id={pool.id}
-            className="size-[18px] rounded-[5px] bg-white/10 text-white outline-[0.5px] -outline-offset-[0.5px] outline-white/10"
-          />
-          <span className={badge({ verdict: worst(fullest.segments) })}>
-            {pooledLeft(fullest)}%
-          </span>
-        </span>
-      );
-    })}
+const Warning = ({ reasons }: { reasons: string }) => (
+  <span className="text-mac-orange flex shrink-0">
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3">
+      <title>{reasons}</title>
+      <path
+        d="M8 1.4c.5 0 .9.3 1.2.7l5.9 10.4c.5.9-.1 2-1.2 2H2.1c-1.1 0-1.7-1.1-1.2-2L6.8 2.1c.3-.4.7-.7 1.2-.7Z"
+        fill="currentColor"
+      />
+      <path
+        d="M8 5.7v3.9"
+        className="stroke-menu"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="8" cy="11.9" r="0.9" className="fill-menu" />
+    </svg>
+    <span className="sr-only">Needs attention</span>
   </span>
 );
+
+const Badges = () => {
+  const reasons = pools.flatMap((pool) =>
+    needsAttention(pool) ? [`${pool.name} needs attention`] : []
+  );
+
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      {reasons.length > 0 && <Warning reasons={reasons.join("\n")} />}
+      {pools.map((pool) => {
+        const fullest = fullestWindow(pool);
+
+        return (
+          <span key={pool.id} className="flex items-center gap-[5px]">
+            <span className="sr-only">{spokenSummary(pool)}</span>
+            <AgentLogo
+              id={pool.id}
+              className="size-[18px] rounded-[5px] bg-white/10 text-white outline-[0.5px] -outline-offset-[0.5px] outline-white/10"
+            />
+            <span
+              aria-hidden="true"
+              className={badge({ verdict: worst(fullest.segments) })}
+            >
+              {pooledLeft(fullest)}%
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+};
 
 const Meter = ({ usage }: { usage: UsageWindow }) => (
   <span className="flex h-[5px] w-4 rounded-full bg-white/15">
@@ -275,7 +318,7 @@ const Bar = ({ usage, elapsed }: { usage: UsageWindow; elapsed: number }) => {
         ))}
       </div>
       <span className="min-w-[34px] text-right text-[12px] tabular-nums">
-        {pooledLeft(usage)}%
+        {pooledLeft(usage)}%<span className="sr-only"> left</span>
       </span>
       {verdict !== "fine" && (
         <span
@@ -311,6 +354,7 @@ const PoolRow = ({
         type="button"
         aria-expanded={open}
         aria-controls={id}
+        aria-label={spokenSummary(pool)}
         onClick={onToggle}
         className="group flex w-full items-center gap-1.5 text-left transition-opacity duration-150 ease-out active:opacity-55 active:duration-0"
       >
