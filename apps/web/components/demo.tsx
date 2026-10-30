@@ -163,7 +163,7 @@ const MenuItem = ({
     className="group hover:bg-mac-blue flex items-center justify-between rounded-[4px] px-2 py-1 text-left text-[13px]"
   >
     {children}
-    <span className="text-[12px] text-white/45 group-hover:text-white/80">
+    <span className="text-[12px] text-white/45 group-hover:text-white/80 contrast-more:text-white/75">
       {shortcut}
     </span>
   </button>
@@ -171,7 +171,9 @@ const MenuItem = ({
 
 const AgentStatus = ({ agent }: { agent: DemoAgent }) => {
   if (agent.state === "idle") {
-    return <span className="text-white/45">Idle</span>;
+    return (
+      <span className="text-white/45 contrast-more:text-white/75">Idle</span>
+    );
   }
 
   const working = agent.state === "working";
@@ -462,7 +464,9 @@ const Menu = ({
         </div>
         <div className="mt-2 flex justify-between text-[12px] tabular-nums">
           <span className="font-medium">{BATTERY}% left</span>
-          <span className="text-white/45">Stops below {CUTOFF}%</span>
+          <span className="text-white/45 contrast-more:text-white/75">
+            Stops below {CUTOFF}%
+          </span>
         </div>
         {holding && (
           <p className="mt-1 text-[12px] text-white/55 tabular-nums">
@@ -475,7 +479,7 @@ const Menu = ({
       <section className="px-4 py-2.5">
         <div className="flex items-baseline justify-between">
           <h3 className="text-[15px] font-bold">Agents</h3>
-          <span className="text-[12px] text-white/45 tabular-nums">
+          <span className="text-[12px] text-white/45 tabular-nums contrast-more:text-white/75">
             {workingCount === 0 ? "None working" : `${workingCount} working`}
           </span>
         </div>
