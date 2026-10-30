@@ -408,8 +408,8 @@ private struct AgentRow: View, Themed {
 }
 
 /// Grows from nothing to its content's height and back. The content hangs from the bottom edge, so
-/// it slides out from under the row above and returns the same way; with Reduce Motion it is
-/// revealed in place instead. The window it lives in stays stationary, so nothing overlaps.
+/// it slides out from under the row above and returns the same way. With Reduce Motion the height
+/// snaps and the content fades in place, because sliding what sits below is the motion it asks to avoid.
 private struct Collapsible<Content: View>: View {
     let expanded: Bool
     let reduceMotion: Bool
@@ -421,7 +421,11 @@ private struct Collapsible<Content: View>: View {
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: expanded ? height : 0, alignment: reduceMotion ? .top : .bottom)
+            .transaction { transaction in
+                if reduceMotion { transaction.animation = nil }
+            } body: {
+                $0.frame(height: expanded ? height : 0, alignment: reduceMotion ? .top : .bottom)
+            }
             .clipped()
             .opacity(expanded ? 1 : 0)
             .accessibilityHidden(!expanded)
@@ -937,9 +941,10 @@ private struct MenuWindow: NSViewRepresentable {
 
 private struct BlurFade: ViewModifier {
     let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content.opacity(active ? 0 : 1).blur(radius: active ? 2 : 0)
+        content.opacity(active ? 0 : 1).blur(radius: active && !reduceMotion ? 2 : 0)
     }
 }
 
