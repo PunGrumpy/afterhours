@@ -309,7 +309,7 @@ struct AddHubSheet: View {
             Text("Add a CLIProxyAPI hub").font(.headline)
             Form {
                 TextField("Label", text: $label, prompt: Text("Team hub"))
-                TextField("URL", text: $url, prompt: Text("https://hub.example.com"))
+                TextField("URL", text: $url, prompt: Text(verbatim: "https://hub.example.com"))
                 SecureField("Management key", text: $key)
             }
             .formStyle(.columns)
