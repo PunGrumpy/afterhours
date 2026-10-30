@@ -503,13 +503,22 @@ private struct LimitsSummary: View, Themed {
     var body: some View {
         let troubled = pools.filter(PoolRows.needsAttention)
         let reasons = hubErrors + troubled.map { "\($0.name) needs attention" }
-        let byUrgency = troubled + pools.filter { !PoolRows.needsAttention($0) }
+        let now = Date()
+        let severities = troubled.map { severity(of: $0, now: now) }
+        let worstFirst = troubled.indices.sorted { lhs, rhs in
+            severities[lhs] == severities[rhs] ? lhs < rhs : severities[lhs] > severities[rhs]
+        }.map { troubled[$0] }
+        let byUrgency = worstFirst + pools.filter { !PoolRows.needsAttention($0) }
         ViewThatFits(in: .horizontal) {
             candidate(pools, hiding: [], reasons: reasons)
             ForEach(Array((1..<max(pools.count, 1)).reversed()), id: \.self) { shown in
                 candidate(Array(byUrgency.prefix(shown)), hiding: Array(byUrgency.dropFirst(shown)), reasons: reasons)
             }
         }
+    }
+
+    private func severity(of pool: ProviderPool, now: Date) -> UsageColor.Verdict {
+        pool.windows.map { UsageColor.verdict($0, now: now) }.max() ?? .fine
     }
 
     private func candidate(_ shown: [ProviderPool], hiding hidden: [ProviderPool], reasons: [String]) -> some View {
