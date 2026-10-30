@@ -424,7 +424,7 @@ const Menu = ({
       data-menu=""
       data-open={open || undefined}
       inert={!open}
-      className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
+      className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 motion-reduce:[transform:none] contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <div
@@ -568,7 +568,7 @@ const ClosedCard = ({
     <div
       aria-hidden={!shown}
       data-shown={shown || undefined}
-      className="pointer-events-none absolute inset-x-0 top-[18%] flex flex-col items-center gap-4 text-center opacity-0 blur-[2px] transition-[opacity,filter] duration-200 ease-out data-[shown]:opacity-100 data-[shown]:blur-none data-[shown]:delay-[450ms]"
+      className="pointer-events-none absolute inset-x-0 top-[18%] flex flex-col items-center gap-4 text-center opacity-0 blur-[2px] transition-[opacity,filter] duration-200 ease-out data-[shown]:opacity-100 data-[shown]:blur-none data-[shown]:delay-[450ms] motion-reduce:blur-none"
     >
       <Mug
         mood={moodFor[hold]}
@@ -734,7 +734,7 @@ export const Demo = () => {
                       onClose={() => setMenuOpen(false)}
                     />
                     <div
-                      className="pointer-events-none absolute inset-0 z-30 bg-black opacity-0 transition-opacity duration-[900ms] ease-in-out data-[closed]:opacity-70"
+                      className="pointer-events-none absolute inset-0 z-30 bg-black opacity-0 transition-opacity duration-[900ms] ease-in-out data-[closed]:opacity-70 motion-reduce:duration-300"
                       data-closed={lidClosed || undefined}
                     />
                   </div>

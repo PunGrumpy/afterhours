@@ -147,4 +147,10 @@ html {
       opacity: 0;
     }
   }
+
+  @keyframes blur-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
