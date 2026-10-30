@@ -16,7 +16,7 @@ A macOS menu bar app that keeps a Mac awake while coding agents work, plus its m
 
 ## Snapshot the menu and Settings
 
-`Afterhours --snapshot out.png [expanded]` renders the menu with sample data and writes it to a PNG. `Afterhours --snapshot-settings out.png [general|power|agents|limits|hub]` renders one Settings tab the same way. Judge a visual change by opening the PNG, not by reading the view code.
+`Afterhours --snapshot out.png [expanded] [crowded]` renders the menu with sample data and writes it to a PNG; `crowded` renders seven providers. `Afterhours --snapshot-settings out.png [general|power|agents|limits|hub]` renders one Settings tab the same way. Judge a visual change by opening the PNG, not by reading the view code.
 
 ## Restart the app on a closed lid
 

@@ -6,12 +6,12 @@ struct AfterhoursApp: App {
     @State private var model: AppModel
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
-    /// `Afterhours --snapshot out.png [expanded]` renders the menu with sample data and exits, so the
-    /// design can be reviewed without clicking through the menu bar.
+    /// `Afterhours --snapshot out.png [expanded] [crowded]` renders the menu with sample data and exits, so the
+    /// design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven show.
     init() {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--snapshot"), arguments.count > index + 1 {
-            Self.snapshotMenu(to: arguments[index + 1], expanded: arguments.contains("expanded"))
+            Self.snapshotMenu(to: arguments[index + 1], expanded: arguments.contains("expanded"), crowded: arguments.contains("crowded"))
         }
         if let index = arguments.firstIndex(of: "--snapshot-settings"), arguments.count > index + 1 {
             Self.snapshotSettings(to: arguments[index + 1], page: arguments.dropFirst(index + 2).first ?? "general")
@@ -20,15 +20,15 @@ struct AfterhoursApp: App {
         _model = State(initialValue: AppModel())
     }
 
-    private static func previewModel(expanded: Bool) -> AppModel {
+    private static func previewModel(expanded: Bool, crowded: Bool) -> AppModel {
         let prefs = Preferences(defaults: UserDefaults(suiteName: "app.afterhours.snapshot")!)
         prefs.limitsExpanded = expanded
         prefs.hubs = [UsageHub(id: "sample", label: "Thaipass", url: "https://thaipass-proxy.vercel.app")]
-        return AppModel(preview: prefs)
+        return AppModel(preview: prefs, crowded: crowded)
     }
 
-    private static func snapshotMenu(to path: String, expanded: Bool) -> Never {
-        let model = previewModel(expanded: expanded)
+    private static func snapshotMenu(to path: String, expanded: Bool, crowded: Bool) -> Never {
+        let model = previewModel(expanded: expanded, crowded: crowded)
         let renderer = ImageRenderer(content: MenuView(model: model, prefs: model.prefs, snapshot: true))
         renderer.scale = 2
         if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
@@ -41,7 +41,7 @@ struct AfterhoursApp: App {
     /// Settings is built from AppKit controls, which only draw inside a real window. `page` is a tab
     /// name or "hub" for the add-hub sheet.
     private static func snapshotSettings(to path: String, page: String) -> Never {
-        let model = previewModel(expanded: false)
+        let model = previewModel(expanded: false, crowded: false)
         let root: AnyView = if page == "hub" {
             AnyView(AddHubSheet(model: model, prefs: model.prefs))
         } else {
