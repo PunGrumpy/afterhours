@@ -170,6 +170,28 @@ const countdown = (minutes: number) => {
 
 const settle = (progress: number) => 1 - (1 - progress) ** 5;
 
+const measureOpen = (scroller: HTMLElement, body: HTMLElement) => {
+  const last = scroller.lastElementChild;
+
+  if (!(last instanceof HTMLElement)) {
+    return null;
+  }
+
+  const height =
+    last.offsetTop +
+    last.offsetHeight +
+    body.offsetHeight -
+    (body.parentElement?.offsetHeight ?? 0);
+
+  const { scrollTop } = scroller;
+  scroller.style.height = `${height}px`;
+  const client = scroller.clientHeight;
+  scroller.style.height = "";
+  scroller.scrollTop = scrollTop;
+
+  return { client, max: height - client };
+};
+
 const badge = cva("text-[12px] font-medium tabular-nums", {
   variants: {
     verdict: {
@@ -463,11 +485,21 @@ export const Limits = ({
     }
 
     const start = scroller.scrollTop;
+    const open = measureOpen(scroller, body.current);
 
-    const end = Math.min(
-      row.current.offsetTop - 10,
-      scroller.scrollHeight + body.current.offsetHeight - scroller.clientHeight
+    if (!open) {
+      return;
+    }
+
+    const target = Math.min(row.current.offsetTop - 10, open.max);
+
+    const edges = [...scroller.children].flatMap((child) =>
+      child instanceof HTMLElement && child.tagName === "SECTION"
+        ? [child.offsetTop]
+        : []
     );
+
+    const end = Math.max(0, ...edges.filter((top) => top <= target));
 
     if (end <= start) {
       return;
