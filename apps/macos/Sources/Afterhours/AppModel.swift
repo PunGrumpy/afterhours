@@ -512,22 +512,20 @@ final class AppModel {
     /// One identifier per kind, so a new notice replaces the last of its kind instead of piling up.
     private enum NoticeKind: String { case hold, battery, hotkey }
 
-    private var notificationsAllowed: Bool { notificationStatus == .authorized || notificationStatus == .provisional }
-
-    /// Reads the system's answer, so Settings can say when macOS blocks notifications and the chime can follow it.
+    /// Reads the system's answer, so Settings can say when macOS blocks notifications and a denied app stays silent.
     func refreshNotificationStatus() async {
         guard Self.canNotify else { return }
         notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
     private func announce(_ title: String, body: String, kind: NoticeKind) {
-        let delivers = prefs.notifications && Self.canNotify && notificationsAllowed
-        if !prefs.sound.isEmpty, !delivers { NSSound(named: NSSound.Name(prefs.sound))?.play() }
+        if !prefs.sound.isEmpty, !(prefs.notifications && notificationStatus == .denied) {
+            NSSound(named: NSSound.Name(prefs.sound))?.play()
+        }
         guard prefs.notifications, Self.canNotify else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        if !prefs.sound.isEmpty { content.sound = UNNotificationSound(named: UNNotificationSoundName("\(prefs.sound).aiff")) }
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: kind.rawValue, content: content, trigger: nil))
     }
