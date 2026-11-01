@@ -98,12 +98,17 @@ final class AppModel {
             terminationSignals.append(source)
         }
         if prefs.notifications, Self.canNotify {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
-                Task { @MainActor in await self?.refreshNotificationStatus() }
+            // A denied app must stay silent from the first hold on, so the status is read before the first tick;
+            // the permission prompt comes after it, so the hold never waits on an answer.
+            Task { [weak self] in
+                guard let self else { return }
+                await refreshNotificationStatus()
+                tick()
+                await askForNotificationAccess()
             }
+        } else {
+            tick()
         }
-
-        tick()
         watchSessions()
         // The tolerance lets macOS coalesce this wakeup with others instead of waking the CPU just for it.
         Task { [weak self] in
