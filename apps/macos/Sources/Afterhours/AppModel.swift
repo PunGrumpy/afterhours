@@ -518,6 +518,16 @@ final class AppModel {
         notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
+    /// The launch request only runs when notifications were on at launch, so turning them on later asks here.
+    func askForNotificationAccess() async {
+        guard Self.canNotify else { return }
+        await refreshNotificationStatus()
+        if notificationStatus == .notDetermined {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            await refreshNotificationStatus()
+        }
+    }
+
     private func announce(_ title: String, body: String, kind: NoticeKind) {
         if !prefs.sound.isEmpty, !(prefs.notifications && notificationStatus == .denied) {
             NSSound(named: NSSound.Name(prefs.sound))?.play()

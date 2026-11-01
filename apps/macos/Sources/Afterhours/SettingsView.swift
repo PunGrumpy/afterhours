@@ -97,11 +97,24 @@ private struct GeneralTab: View {
                         if !name.isEmpty { NSSound(named: NSSound.Name(name))?.play() }
                     }
                 }
+            } footer: {
+                if prefs.notifications, model.notificationStatus == .denied {
+                    Text("Notifications are off for Afterhours in System Settings.")
+                    Button("Open Notification Settings…") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
             }
 
             SettingsSection("Display") {
                 SettingsToggle(title: "Turn off the display when agents start", isOn: $prefs.turnDisplayOff)
             }
+        }
+        .task { await model.refreshNotificationStatus() }
+        .onChange(of: prefs.notifications) { _, on in
+            if on { Task { await model.askForNotificationAccess() } }
         }
     }
 }
