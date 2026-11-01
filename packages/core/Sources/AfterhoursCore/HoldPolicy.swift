@@ -17,6 +17,13 @@ public enum HoldState: Equatable, Sendable {
     public var isHolding: Bool { self == .holding }
 }
 
+/// What a change between hold states tells the person, if anything.
+public enum HoldNotice: Equatable, Sendable {
+    case started
+    case finished
+    case blocked(String)
+}
+
 /// The rules that decide whether to keep the Mac awake, free of IOKit and timers so tests can pin them.
 public enum HoldPolicy {
     /// The wait setting that lasts until every agent session closes.
@@ -67,5 +74,17 @@ public enum HoldPolicy {
         guard reason != nil else { return .idle }
         if let blocker { return .blocked(blocker) }
         return .holding
+    }
+
+    /// Off and paused are the person's own doing, so no change into or out of them speaks, and only holds that start or end do.
+    public static func notice(from: HoldState, to: HoldState) -> HoldNotice? {
+        switch (from, to) {
+        case (.disabled, _), (.paused, _), (_, .disabled), (_, .paused): nil
+        case (.holding, .holding): nil
+        case (_, .holding): .started
+        case (.holding, .blocked(let reason)): .blocked(reason)
+        case (.holding, .idle): .finished
+        default: nil
+        }
     }
 }
