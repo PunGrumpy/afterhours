@@ -99,7 +99,7 @@ private struct GeneralTab: View {
                 }
             } footer: {
                 if prefs.notifications, model.notificationStatus == .denied {
-                    Text("Notifications are off for Afterhours in System Settings.")
+                    SettingsError(message: "Notifications are off for Afterhours in System Settings.")
                     Button("Open Notification Settings…") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
                             NSWorkspace.shared.open(url)
