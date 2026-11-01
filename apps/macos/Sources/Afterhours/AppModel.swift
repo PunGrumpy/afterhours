@@ -31,7 +31,11 @@ final class AppModel {
     /// Agents whose CLI is installed, so the menu can list them even when not running.
     private(set) var installedAgents: Set<String> = []
     private(set) var pausedUntil: Date?
-    private(set) var lastError: String?
+    /// The latest pmset or install problem, shown in Settings next to the lid row and in the menu.
+    private(set) var lidError: String?
+    /// The hook binary couldn't be installed at launch.
+    private(set) var hookError: String?
+    var lastError: String? { lidError ?? hookError }
     /// True when the shortcut is on in Settings but couldn't be registered.
     private(set) var hotKeyTaken = false
 
@@ -67,7 +71,7 @@ final class AppModel {
         // Recover from a previous crash that left lid sleep disabled.
         if Power.sleepDisabled, LidControl.isInstalled { LidControl.setSleepDisabled(false) }
         do { try ClaudeHooks.installHookBinary() } catch {
-            lastError = "Couldn't install afterhours-hook: \(error.localizedDescription)"
+            hookError = "Couldn't install afterhours-hook: \(error.localizedDescription)"
         }
 
         prefs.onChange = { [weak self] in
@@ -196,10 +200,10 @@ final class AppModel {
     private func changeLidControl(_ change: () throws -> Void) {
         do {
             try change()
-            lastError = nil
+            lidError = nil
         } catch is CancellationError {
         } catch {
-            lastError = error.localizedDescription
+            lidError = error.localizedDescription
         }
         lidControlInstalled = LidControl.isInstalled
         sleepDisabledByUs = false
@@ -316,9 +320,9 @@ final class AppModel {
             if LidControl.setSleepDisabled(wantLid) {
                 sleepDisabledByUs = wantLid
                 lidRetryAt = nil
-                if lastError == Self.pmsetFailure { lastError = nil }
+                if lidError == Self.pmsetFailure { lidError = nil }
             } else {
-                lastError = Self.pmsetFailure
+                lidError = Self.pmsetFailure
                 lidControlInstalled = LidControl.isInstalled
                 if wantLid { lidRetryAt = Date().addingTimeInterval(lidRetryInterval) }
             }

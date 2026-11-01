@@ -121,17 +121,22 @@ enum LidControl {
         /bin/echo '\(rule)' > "$t"; /usr/sbin/visudo -cf "$t"; \
         /usr/bin/install -m 0440 -o root -g wheel "$t" \(sudoersPath)
         """
-        try runAsAdmin(shell)
+        try runAsAdmin(shell, prompt: "Afterhours needs your password to install lid-closed mode.")
     }
 
     static func uninstall() throws {
         // Root needs no rule, so this works even when the rule is the broken thing being removed.
-        try runAsAdmin("set -e; /usr/bin/pmset -a disablesleep 0; /bin/rm -f \(sudoersPath)")
+        try runAsAdmin(
+            "set -e; /usr/bin/pmset -a disablesleep 0; /bin/rm -f \(sudoersPath)",
+            prompt: "Afterhours needs your password to uninstall lid-closed mode."
+        )
     }
 
-    private static func runAsAdmin(_ shell: String) throws {
-        let escaped = shell.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(escaped)\" with administrator privileges"
+    private static func runAsAdmin(_ shell: String, prompt: String) throws {
+        func escape(_ text: String) -> String {
+            text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        let script = "do shell script \"\(escape(shell))\" with prompt \"\(escape(prompt))\" with administrator privileges"
         var error: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&error)
         if let error {

@@ -76,7 +76,7 @@ struct MenuView: View, Themed {
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.orange)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ChipButton(title: "Set up…") {
+                    ChipButton(title: "Install…") {
                         dismiss()
                         Task { model.installLidControl() }
                     }
