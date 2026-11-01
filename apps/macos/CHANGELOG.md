@@ -1,5 +1,14 @@
 # @afterhours/macos
 
+## 0.3.5
+
+### Patch Changes
+
+- d22f42b: When lid-closed mode stops working, the Power tab in Settings now says so and offers Reinstall…, and errors from Install… and Uninstall… appear there too instead of only in the menu. The admin password dialog says what it is for, and Settings errors are readable in the light appearance.
+- 6bf3ccf: When Limits is collapsed and you have more providers than fit on one line, the row now shows the providers that need attention first and a "+N" for the rest, instead of wrapping the title or clipping the badges.
+- 3ad6e87: The menu bar mug now looks different when Afterhours is off than when it is idle, so a glance tells you whether it will keep your Mac awake. The Pause buttons are unavailable while Afterhours is off, and turning it back on no longer lands in a stale pause. VoiceOver now hears the icon's state, which 0.3.4 promised but didn't deliver.
+- 4fd4c39: Afterhours no longer chimes and posts a banner when you flip its switch, pause it or resume it from the menu, and each kind of notice replaces the last one in Notification Center instead of piling up. ⌥⌘L still tells you what it did. When macOS has notifications turned off for Afterhours, Settings says so and offers to open the system setting.
+
 ## 0.3.4
 
 ### Patch Changes
