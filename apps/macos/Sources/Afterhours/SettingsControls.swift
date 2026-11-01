@@ -71,7 +71,7 @@ struct SettingsError: View {
     let message: String
 
     var body: some View {
-        Label { Text(message) } icon: {
+        Label { Text(message).foregroundStyle(.primary) } icon: {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
         }
     }
