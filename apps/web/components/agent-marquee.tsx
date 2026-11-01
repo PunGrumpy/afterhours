@@ -8,7 +8,7 @@ const AgentList = ({ hidden = false }: { hidden?: boolean }) => (
     aria-hidden={hidden || undefined}
     aria-label={hidden ? undefined : "Works with"}
     className={cn(
-      "flex shrink-0 gap-1.5 pr-1.5 motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:pr-0",
+      "flex shrink-0 gap-1.5 pr-1.5 motion-reduce:shrink motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:pr-0",
       { "motion-reduce:hidden": hidden }
     )}
   >

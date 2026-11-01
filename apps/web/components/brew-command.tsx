@@ -34,13 +34,16 @@ export const BrewCommand = ({ className }: { className?: string }) => {
         type="button"
         onClick={copy}
         aria-label="Copy the Homebrew install command"
-        className="press bg-surface flex h-10 max-w-full items-center gap-3 rounded-full pr-1.5 pl-4 font-mono text-[13px] hover:bg-[#eceef2]"
+        className="press bg-surface flex h-10 max-w-full items-center gap-3 rounded-full pr-1.5 pl-4 font-mono text-[13px] hover:bg-[#eceef2] max-sm:h-auto max-sm:min-h-10 max-sm:rounded-[20px] max-sm:py-2"
       >
-        <span className="flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto max-sm:[mask-image:linear-gradient(to_right,black_85%,transparent)]">
+        <span className="flex min-w-0 [scrollbar-width:none] items-center gap-2 sm:overflow-x-auto">
           <span aria-hidden="true" className="text-ink/35 select-none">
             $
           </span>
-          <span ref={command} className="text-ink/80 whitespace-nowrap">
+          <span
+            ref={command}
+            className="text-ink/80 whitespace-nowrap max-sm:text-left max-sm:whitespace-normal"
+          >
             {site.brew}
           </span>
         </span>
