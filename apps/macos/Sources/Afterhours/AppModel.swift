@@ -36,6 +36,7 @@ final class AppModel {
     /// The hook binary couldn't be installed at launch.
     private(set) var hookError: String?
     var lastError: String? { lidError ?? hookError }
+    private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     /// True when the shortcut is on in Settings but couldn't be registered.
     private(set) var hotKeyTaken = false
 
@@ -97,7 +98,9 @@ final class AppModel {
             terminationSignals.append(source)
         }
         if prefs.notifications, Self.canNotify {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
+                Task { @MainActor in await self?.refreshNotificationStatus() }
+            }
         }
 
         tick()
@@ -180,13 +183,12 @@ final class AppModel {
 
     // MARK: - Actions
 
-    /// The mug looks the same off and idle, so a press that doesn't start or end a hold says what it did.
+    /// ⌥⌘L has no visible menu, so it always says what it did.
     func toggleEnabled() {
-        let wasHolding = state.isHolding
         prefs.enabled.toggle()
-        guard state.isHolding == wasHolding else { return }
         announce(prefs.enabled ? "Afterhours is on" : "Afterhours is off",
-                 body: "You pressed ⌥⌘L. If another app needs that shortcut, turn it off in Settings > General.")
+                 body: "You pressed ⌥⌘L. If another app needs that shortcut, turn it off in Settings > General.",
+                 kind: .hotkey)
     }
 
     /// Registers ⌥⌘L only while the setting is on, so turning it off frees the keys at once.
@@ -310,7 +312,8 @@ final class AppModel {
         guard percent <= prefs.batteryThreshold + 5, !warnedLowBattery else { return }
         warnedLowBattery = true
         announce("Battery is getting low",
-                 body: "Afterhours lets your Mac sleep at \(prefs.batteryThreshold)%. It's at \(percent)% now.")
+                 body: "Afterhours lets your Mac sleep at \(prefs.batteryThreshold)%. It's at \(percent)% now.",
+                 kind: .battery)
     }
 
     private func blocker() -> String? {
@@ -321,6 +324,7 @@ final class AppModel {
     }
 
     private func apply(_ next: HoldState) {
+        let previous = state
         let wasHolding = state.isHolding
         if next != state { state = next }
 
@@ -349,13 +353,17 @@ final class AppModel {
 
         guard wasHolding != next.isHolding else { return }
         holdingSince = next.isHolding ? Date() : nil
+        switch HoldPolicy.notice(from: previous, to: next) {
+        case .started: announce("Keeping your Mac awake", body: summary, kind: .hold)
+        case .finished: announce("Your Mac can sleep again", body: "All agents finished.", kind: .hold)
+        case .blocked(let reason): announce("Your Mac can sleep again", body: reason, kind: .hold)
+        case nil: break
+        }
         if next.isHolding {
-            announce("Keeping your Mac awake", body: summary)
             if prefs.turnDisplayOff { Power.displaySleepNow() }
-        } else {
-            announce("Your Mac can sleep again", body: releaseReason(next))
+        } else if Power.lidClosed, Power.lidClosedWouldSleep {
             // A docked Mac with its lid shut is in use, so only force sleep when the lid would sleep it anyway.
-            if Power.lidClosed, Power.lidClosedWouldSleep { Power.sleepNow() }
+            Power.sleepNow()
         }
     }
 
@@ -501,23 +509,27 @@ final class AppModel {
     /// UNUserNotificationCenter throws when the binary isn't running from an app bundle.
     private static let canNotify = Bundle.main.bundleIdentifier != nil
 
-    private func releaseReason(_ state: HoldState) -> String {
-        switch state {
-        case .blocked(let reason): reason
-        case .disabled: "You turned Afterhours off."
-        case .paused: "You paused Afterhours."
-        default: "All agents finished."
-        }
+    /// One identifier per kind, so a new notice replaces the last of its kind instead of piling up.
+    private enum NoticeKind: String { case hold, battery, hotkey }
+
+    private var notificationsAllowed: Bool { notificationStatus == .authorized || notificationStatus == .provisional }
+
+    /// Reads the system's answer, so Settings can say when macOS blocks notifications and the chime can follow it.
+    func refreshNotificationStatus() async {
+        guard Self.canNotify else { return }
+        notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
-    private func announce(_ title: String, body: String) {
-        if !prefs.sound.isEmpty { NSSound(named: NSSound.Name(prefs.sound))?.play() }
+    private func announce(_ title: String, body: String, kind: NoticeKind) {
+        let delivers = prefs.notifications && Self.canNotify && notificationsAllowed
+        if !prefs.sound.isEmpty, !delivers { NSSound(named: NSSound.Name(prefs.sound))?.play() }
         guard prefs.notifications, Self.canNotify else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
+        if !prefs.sound.isEmpty { content.sound = UNNotificationSound(named: UNNotificationSoundName("\(prefs.sound).aiff")) }
         UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+            UNNotificationRequest(identifier: kind.rawValue, content: content, trigger: nil))
     }
 }
 
