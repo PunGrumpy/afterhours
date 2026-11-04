@@ -63,7 +63,7 @@ struct MenuView: View, Themed {
     @State private var contentHeight: CGFloat = 0
     @State private var topHeight: CGFloat = 0
     @State private var bottomHeight: CGFloat = 0
-    /// The tallest the whole menu may be, known once the window reports where it sits.
+    /// The tallest the whole menu may be on the screen its window is on.
     @State private var windowLimit: CGFloat?
 
     private var maxHeight: CGFloat? { previewMaxHeight ?? windowLimit }
@@ -88,6 +88,10 @@ struct MenuView: View, Themed {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .frame(height: bodyHeight)
+                .overlay(alignment: .bottom) {
+                    // The middle's own last divider has scrolled out of view.
+                    if let bodyHeight, bodyHeight < contentHeight { divider }
+                }
             } else {
                 middle
             }
@@ -99,8 +103,8 @@ struct MenuView: View, Themed {
         .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
         .background {
             if !snapshot {
-                MenuWindow(onShow: { model.menuOpened() }, onPlace: { top, visible in
-                    windowLimit = MenuGeometry.maximumHeight(windowTop: top, visibleFrame: visible)
+                MenuWindow(onShow: { model.menuOpened() }, onScreen: { visible in
+                    windowLimit = MenuGeometry.maximumHeight(visibleFrame: visible)
                 })
             }
         }
@@ -439,8 +443,8 @@ private struct AgentRow: View, Themed {
     private var isActive: Bool { tally.working + tally.waiting > 0 }
 
     private var dot: Color? {
-        if tally.working > 0 { return Palette.green }
-        return tally.waiting > 0 ? Palette.orange : nil
+        if tally.waiting > 0 { return Palette.orange }
+        return tally.working > 0 ? Palette.green : nil
     }
 
     var body: some View {
@@ -1063,49 +1067,56 @@ private struct PillSwitchBody: View, Themed {
 
 /// The menu is designed dark only, so force the popover window's appearance. Also reports each time
 /// the window comes on screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra, and
-/// where its top edge sits, which is what limits how tall the menu may grow.
+/// which screen it's on, which limits how tall the menu may grow.
 private struct MenuWindow: NSViewRepresentable {
     let onShow: () -> Void
-    let onPlace: (_ windowTop: CGFloat, _ visibleFrame: CGRect) -> Void
+    let onScreen: (_ visibleFrame: CGRect) -> Void
 
     func makeNSView(context: Context) -> WatchingView {
         let view = WatchingView()
         view.onShow = onShow
-        view.onPlace = onPlace
+        view.onScreen = onScreen
         return view
     }
 
     func updateNSView(_ nsView: WatchingView, context: Context) {
         nsView.onShow = onShow
-        nsView.onPlace = onPlace
+        nsView.onScreen = onScreen
     }
 
     final class WatchingView: NSView {
         var onShow: () -> Void = {}
-        var onPlace: (CGFloat, CGRect) -> Void = { _, _ in }
+        var onScreen: (CGRect) -> Void = { _ in }
         private var observer: NSObjectProtocol?
+        private var screenObserver: NSObjectProtocol?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
             guard let window else { return }
+            // Reported before the window is visible too, or the first open could already run off the screen.
+            DispatchQueue.main.async { [weak self] in self?.reportScreen() }
+            screenObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reportScreen() }
+            }
             window.appearance = NSAppearance(named: .darkAqua)
             observer = NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
-                    self.shown()
+                    self.onShow()
+                    self.reportScreen()
                 }
             }
-            if window.occlusionState.contains(.visible) { shown() }
+            if window.occlusionState.contains(.visible) { onShow() }
         }
 
-        private func shown() {
-            onShow()
-            if let window, let screen = window.screen ?? NSScreen.main {
-                onPlace(window.frame.maxY, screen.visibleFrame)
-            }
+        private func reportScreen() {
+            if let screen = window?.screen ?? NSScreen.main { onScreen(screen.visibleFrame) }
         }
     }
 }

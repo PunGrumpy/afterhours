@@ -67,3 +67,7 @@ import Testing
     #expect(tally.total == 3)
     #expect(tally.rowStatus == ["3 idle"])
 }
+
+@Test func sessionTallySaysNeedYouForMoreThanOne() {
+    #expect(SessionTally([.waiting, .waiting]).rowStatus == ["2 need you"])
+}

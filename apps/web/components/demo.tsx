@@ -175,6 +175,9 @@ const stateWords: Record<AgentState, string> = {
   working: "working",
 };
 
+const sessionWords = ({ sessions, state }: DemoAgent) =>
+  `${sessions} ${state === "waiting" && sessions > 1 ? "need you" : stateWords[state]}`;
+
 const sectionStatus = (list: DemoAgent[]) => {
   let total = 0;
   let working = 0;
@@ -219,7 +222,7 @@ const AgentStatus = ({ agent }: { agent: DemoAgent }) => {
           idle ? "text-white/45 contrast-more:text-white/75" : "text-white/55"
         }
       >
-        {agent.sessions} {stateWords[agent.state]}
+        {sessionWords(agent)}
       </span>
       {!idle && (
         <span
@@ -274,7 +277,7 @@ const AgentRow = ({
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${agent.name}: ${agent.sessions} ${stateWords[agent.state]}. Change state`}
+      aria-label={`${agent.name}: ${sessionWords(agent)}. Change state`}
       className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left transition-opacity duration-150 ease-out hover:bg-white/[0.07] active:opacity-55 active:duration-0"
     >
       <AgentLogo

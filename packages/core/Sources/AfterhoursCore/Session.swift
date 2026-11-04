@@ -29,7 +29,7 @@ public struct SessionTally: Sendable, Equatable {
 
     /// One agent's row, in the order a glance needs them, leaving out what is zero.
     public var rowStatus: [String] {
-        [(working, "working"), (waiting, "needs you"), (idle, "idle")]
+        [(working, "working"), (waiting, waiting == 1 ? "needs you" : "need you"), (idle, "idle")]
             .filter { $0.0 > 0 }
             .map { "\($0.0) \($0.1)" }
     }
