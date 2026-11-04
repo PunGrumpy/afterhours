@@ -164,6 +164,7 @@ struct MenuView: View, Themed {
                     middle
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
                 }
+                .scrollIndicators(.never)
                 .scrollBounceBehavior(.basedOnSize)
                 .frame(height: bodyHeight)
                 .overlay(alignment: .bottom) {
@@ -561,7 +562,10 @@ private struct AgentRow: View, Themed {
         // The idle count is the first thing to go when the row is tight; the full text stays in the tooltip.
         ViewThatFits(in: .horizontal) {
             row(tally.rowStatus)
-            row(tally.rowStatus.filter { !$0.hasSuffix("idle") })
+            // Only working or waiting counts can stand alone; an all-idle row keeps its one status.
+            if tally.working + tally.waiting > 0 {
+                row(tally.rowStatus.filter { !$0.hasSuffix("idle") })
+            }
         }
         .animation(Motion.fade, value: statusKey)
         .help(tally.rowStatus.joined(separator: " · "))

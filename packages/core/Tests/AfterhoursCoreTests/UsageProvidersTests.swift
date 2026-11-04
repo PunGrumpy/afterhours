@@ -444,3 +444,24 @@ private let cursorFixture = Data("""
     #expect(account.windows.isEmpty)
     #expect(account.error == "Run grok login again")
 }
+
+@Test func antigravityKeepsWindowsWhenABucketsTextFieldsChangeShape() throws {
+    let body = Data("""
+        {"groups": [{"displayName": "Gemini Models", "buckets": [
+          {"bucketId": "gemini-weekly", "window": "weekly", "remainingFraction": 0.75, "displayName": 7,
+           "description": {"text": "x"}},
+          {"bucketId": "gemini-daily", "window": "24h", "remainingFraction": 0.5, "displayName": {"text": "x"}}]}]}
+        """.utf8)
+    let account = try #require(UsageLimits.antigravityAccount([.success(body)], plan: nil, locations: ["a@b.c"]))
+    #expect(account.error == nil)
+    #expect(account.windows.map(\.label) == ["Gemini · Weekly", "Gemini · Quota"])
+}
+
+@Test func antigravityModelFallbackSkipsAMalformedModel() throws {
+    let models = Data("""
+        {"models": {"gemini-a": {"quotaInfo": {"remainingFraction": 0.5}}, "gemini-b": {"quotaInfo": 7}}}
+        """.utf8)
+    let account = try #require(UsageLimits.antigravityAccount([.success(Data("{}".utf8))], models: [.success(models)],
+                                                              plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.label) == ["Gemini · Reported quota"])
+}

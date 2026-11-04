@@ -317,8 +317,8 @@ extension UsageLimits {
         struct Bucket: Decodable {
             let bucketId: String
             let window: String?
-            let displayName: String?
-            let description: String?
+            let displayName: Lenient<String>?
+            let description: Lenient<String>?
             let remainingFraction: Double?
             let resetTime: String?
             let disabled: Bool?
@@ -346,7 +346,7 @@ extension UsageLimits {
             let weeklyQuotaInfo: Quota?
         }
 
-        let models: [String: Model]?
+        let models: [String: Lenient<Model>]?
     }
 
     private struct AntigravitySession {
@@ -593,7 +593,7 @@ extension UsageLimits {
                 switch bucket.window {
                 case "5h": (kind, span, duration) = (.session, "5-hour", 5 * 3600)
                 case "weekly": (kind, span, duration) = (.weekly, "Weekly", 7 * 24 * 3600)
-                default: (kind, span, duration) = (.other, nonEmpty(bucket.displayName) ?? "Quota", nil)
+                default: (kind, span, duration) = (.other, nonEmpty(bucket.displayName?.value) ?? "Quota", nil)
                 }
                 var resetsAt = bucket.resetTime.flatMap(parseISO8601)
                 // A bucket nobody has used reports a reset one full window ahead of every request, which says nothing.
@@ -611,7 +611,8 @@ extension UsageLimits {
 
     private static func antigravityWindows(_ models: AntigravityModels) -> [UsageWindow] {
         var windows: [UsageWindow] = []
-        for (modelId, model) in (models.models ?? [:]).sorted(by: { $0.key < $1.key }) {
+        for (modelId, entry) in (models.models ?? [:]).sorted(by: { $0.key < $1.key }) {
+            guard let model = entry.value else { continue }
             let family: String
             if model.modelProvider == "MODEL_PROVIDER_GOOGLE" || modelId.hasPrefix("gemini-") {
                 family = "Gemini"
