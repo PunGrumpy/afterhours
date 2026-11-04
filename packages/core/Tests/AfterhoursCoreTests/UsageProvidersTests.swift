@@ -47,24 +47,136 @@ private let antigravityFixture = Data("""
     ]}
     """.utf8)
 
+private func ok(_ json: String) -> Result<Data, UsageLimits.FetchError> { .success(Data(json.utf8)) }
+
+private func iso(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
+
 @Test func antigravityAccountReadsEachGroupsWindows() throws {
-    let account = try #require(UsageLimits.antigravityAccount(.success(antigravityFixture), plan: "Google AI Pro",
-                                                              locations: ["a@b.c"]))
-    #expect(account.windows.map(\.id) == ["gemini-weekly", "gemini-5h", "3p-weekly"])
-    #expect(account.windows.map(\.kind) == [.weekly, .session, .weekly])
-    #expect(account.windows.map(\.label) == ["Weekly · Gemini", "Session · Gemini", "Weekly · Claude & GPT"])
-    #expect(account.windows.map(\.usedPercent) == [25, 0, 100])
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    let account = try #require(UsageLimits.antigravityAccount([.success(antigravityFixture)], plan: "Google AI Pro",
+                                                              locations: ["a@b.c"], requestedAt: now))
+    #expect(account.windows.map(\.id) == ["gemini-weekly", "gemini-5h", "3p-weekly", "3p-daily"])
+    #expect(account.windows.map(\.kind) == [.weekly, .session, .weekly, .other])
+    #expect(account.windows.map(\.label) == ["Gemini · Weekly", "Gemini · 5-hour", "Claude & GPT (shared) · Weekly",
+                                             "Claude & GPT (shared) · Quota"])
+    #expect(account.windows.map(\.usedPercent) == [25, 0, 100, 50])
     #expect(account.windows[0].resetsAt == Date(timeIntervalSince1970: 1_792_331_354))
 }
 
+@Test func antigravityNamesAWindowOfAnotherLengthAfterItsBucket() throws {
+    let body = ok(#"{"buckets": [{"bucketId": "gemini-daily", "window": "24h", "displayName": " Daily Limit ", "remainingFraction": 0.5}]}"#)
+    let account = try #require(UsageLimits.antigravityAccount([body], plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.label) == ["Gemini · Daily Limit"])
+    #expect(account.windows.map(\.kind) == [.other])
+    #expect(account.windows[0].pace() == nil)
+}
+
+@Test func antigravityKeepsTheGroupNameForArgonBuckets() throws {
+    let body = ok("""
+        {"groups": [
+          {"displayName": " Gemini Pro Argon ", "buckets": [
+            {"bucketId": "gemini-argon-5h", "window": "5h", "remainingFraction": 0.5}]},
+          {"buckets": [{"bucketId": "gemini-argon-weekly", "window": "weekly", "remainingFraction": 0.5}]},
+          {"displayName": "Other Models", "buckets": [{"bucketId": "misc-weekly", "window": "weekly", "remainingFraction": 1.5}]}]}
+        """)
+    let account = try #require(UsageLimits.antigravityAccount([body], plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.label) == ["Gemini Pro Argon · 5-hour", "Gemini Argon · Weekly", "Other Models · Weekly"])
+    #expect(account.windows.map(\.usedPercent) == [50, 50, 0])
+}
+
+@Test func antigravityDropsTheResetOfABucketNobodyHasUsed() throws {
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    let fullSession = iso(now.addingTimeInterval(5 * 3600 + 30))
+    let body = ok("""
+        {"buckets": [
+          {"bucketId": "gemini-5h", "window": "5h", "resetTime": "\(fullSession)", "remainingFraction": 1},
+          {"bucketId": "3p-5h", "window": "5h", "resetTime": "\(fullSession)", "remainingFraction": 1,
+           "description": "Resets when you next use it"},
+          {"bucketId": "gemini-weekly", "window": "weekly", "resetTime": "\(iso(now.addingTimeInterval(5 * 3600)))",
+           "remainingFraction": 1},
+          {"bucketId": "gemini-used-5h", "window": "5h", "resetTime": "\(fullSession)", "remainingFraction": 0.9}]}
+        """)
+    let account = try #require(UsageLimits.antigravityAccount([body], plan: nil, locations: ["a@b.c"], requestedAt: now))
+    func resetIn(_ id: String) -> TimeInterval? {
+        account.windows.first { $0.id == id }?.resetsAt.map { $0.timeIntervalSince(now) }
+    }
+    #expect(resetIn("gemini-5h") == nil)
+    #expect(abs(try #require(resetIn("3p-5h")) - (5 * 3600 + 30)) < 1)
+    #expect(abs(try #require(resetIn("gemini-weekly")) - 5 * 3600) < 1)
+    #expect(abs(try #require(resetIn("gemini-used-5h")) - (5 * 3600 + 30)) < 1)
+}
+
+@Test func antigravityMergesHostsKeepingTheMostUsedReading() throws {
+    let first = ok("""
+        {"buckets": [{"bucketId": "gemini-5h", "window": "5h", "remainingFraction": 0.75},
+                     {"bucketId": "3p-5h", "window": "5h", "remainingFraction": 0.5}]}
+        """)
+    let second = ok("""
+        {"buckets": [{"bucketId": "gemini-5h", "window": "5h", "remainingFraction": 0.25},
+                     {"bucketId": "gemini-weekly", "window": "weekly", "remainingFraction": 0.5}]}
+        """)
+    let account = try #require(UsageLimits.antigravityAccount([first, second], plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.id) == ["gemini-5h", "3p-5h", "gemini-weekly"])
+    #expect(account.windows.map(\.usedPercent) == [75, 50, 50])
+}
+
+@Test func antigravityShowsNoErrorWhileAnyHostAnswers() throws {
+    let answer = ok(#"{"buckets": [{"bucketId": "gemini-5h", "window": "5h", "remainingFraction": 0.5}]}"#)
+    let account = try #require(UsageLimits.antigravityAccount([.failure(.status(503)), answer], plan: nil,
+                                                              locations: ["a@b.c"]))
+    #expect(account.error == nil)
+    #expect(account.windows.map(\.id) == ["gemini-5h"])
+    #expect(UsageLimits.antigravityAccount([.failure(.status(503)), ok("{}")], plan: nil, locations: ["a@b.c"]) == nil)
+}
+
 @Test func antigravityAccountIsHiddenWithoutAnAllowance() {
-    #expect(UsageLimits.antigravityAccount(.success(Data("{}".utf8)), plan: nil, locations: ["a@b.c"]) == nil)
+    #expect(UsageLimits.antigravityAccount([ok("{}")], plan: nil, locations: ["a@b.c"]) == nil)
+    #expect(UsageLimits.antigravityAccount([ok("{}"), ok("{}")], models: [ok(#"{"models": {}}"#)], plan: nil,
+                                           locations: ["a@b.c"]) == nil)
 }
 
 @Test func antigravityAccountAsksForSignInWhenRejected() {
-    let account = UsageLimits.antigravityAccount(.failure(.status(401)), plan: nil, locations: ["T3 Code"])
+    let account = UsageLimits.antigravityAccount([.failure(.status(401))], plan: nil, locations: ["T3 Code"])
     #expect(account?.windows.isEmpty == true)
     #expect(account?.error == "Sign in to Antigravity again")
+}
+
+@Test func antigravityReportsTheRejectionWhenEveryHostFails() {
+    let rejected = UsageLimits.antigravityAccount([.failure(.status(503)), .failure(.status(401))], plan: nil,
+                                                  locations: ["T3 Code"])
+    #expect(rejected?.error == "Sign in to Antigravity again")
+    let down = UsageLimits.antigravityAccount([.failure(.status(503)), .failure(.network("offline"))], plan: nil,
+                                              locations: ["T3 Code"])
+    #expect(down?.error == "Usage isn't available right now (HTTP 503)")
+}
+
+private let antigravityModelsFixture = """
+    {"models": {
+      "gemini-3-pro": {"modelProvider": "MODEL_PROVIDER_GOOGLE",
+                       "quotaInfo": {"remainingFraction": 0.5, "resetTime": "2026-10-18T13:49:14Z"},
+                       "weeklyQuotaInfo": {"remainingFraction": 0.75}},
+      "gemini-3-flash": {"quotaInfo": {"remainingFraction": 0.25}},
+      "claude-sonnet": {"modelProvider": "MODEL_PROVIDER_ANTHROPIC", "quotaInfo": {"remainingFraction": 1}},
+      "gpt-oss": {"quotaInfo": {"remainingFraction": 0.5}},
+      "tab-model": {"quotaInfo": {"remainingFraction": 0}}}}
+    """
+
+@Test func antigravityFallsBackToModelQuotasWhenThereIsNoSummary() throws {
+    let account = try #require(UsageLimits.antigravityAccount([ok("{}"), ok("{}")], models: [ok(antigravityModelsFixture)],
+                                                              plan: nil, locations: ["a@b.c"]))
+    #expect(account.error == nil)
+    #expect(account.windows.map(\.id) == ["claude-quota", "gemini-quota", "gemini-weekly", "gpt-quota"])
+    #expect(account.windows.map(\.label) == ["Claude · Reported quota", "Gemini · Reported quota", "Gemini · Weekly",
+                                             "GPT · Reported quota"])
+    #expect(account.windows.map(\.kind) == [.other, .other, .weekly, .other])
+    #expect(account.windows.map(\.usedPercent) == [0, 75, 25, 50])
+}
+
+@Test func antigravityPrefersTheSummaryOverModelQuotas() throws {
+    let summary = ok(#"{"buckets": [{"bucketId": "gemini-5h", "window": "5h", "remainingFraction": 0.5}]}"#)
+    let account = try #require(UsageLimits.antigravityAccount([summary], models: [ok(antigravityModelsFixture)],
+                                                              plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.id) == ["gemini-5h"])
 }
 
 @Test func antigravityLoginsCoverTheGeminiHomeAndT3CodeProfiles() throws {
@@ -238,12 +350,19 @@ private let cursorFixture = Data("""
     let account = UsageLimits.cursorAccount(.success(cursorFixture), plan: "Pro", location: "Cursor app")
     #expect(account.plan == "Pro")
     #expect(account.locations == ["Cursor app"])
-    #expect(account.windows.map(\.id) == ["total", "auto", "api"])
-    #expect(account.windows.map(\.label) == ["Plan", "Auto", "API"])
-    #expect(account.windows.map(\.kind) == [.monthly, .monthly, .monthly])
-    #expect(account.windows.map(\.usedPercent) == [42.5, 10, 5])
+    #expect(account.windows.map(\.id) == ["auto", "api"])
+    #expect(account.windows.map(\.label) == ["Cursor Models", "Other Models"])
+    #expect(account.windows.map(\.kind) == [.monthly, .monthly])
+    #expect(account.windows.map(\.usedPercent) == [10, 5])
     #expect(Set(account.windows.map(\.resetsAt)) == [Date(timeIntervalSince1970: 1_793_491_200)])
     #expect(account.error == nil)
+}
+
+@Test func cursorAccountShowsOverallUntilBothPoolsAreReported() {
+    let body = Data(#"{"planUsage": {"totalPercentUsed": 42.5, "apiPercentUsed": 5}}"#.utf8)
+    let account = UsageLimits.cursorAccount(.success(body), plan: nil, location: "Cursor app")
+    #expect(account.windows.map(\.id) == ["total", "api"])
+    #expect(account.windows.map(\.label) == ["Overall", "Other Models"])
 }
 
 @Test func cursorAccountIgnoresACycleEndThatIsNotInTheFuture() {
@@ -282,7 +401,7 @@ private let cursorFixture = Data("""
     #expect(account.error == nil)
 }
 
-@Test func grokAccountTreatsAnyOtherPeriodAsMonthly() {
+@Test func grokAccountReadsAMonthlyPeriod() {
     let monthly = Data("""
         {"config": {"creditUsagePercent": 5, "currentPeriod": {"type": "USAGE_PERIOD_TYPE_MONTHLY"}}}
         """.utf8)
@@ -290,8 +409,28 @@ private let cursorFixture = Data("""
     #expect(account.windows.map(\.kind) == [.monthly])
     #expect(account.windows.map(\.label) == ["Monthly"])
     #expect(account.windows.map(\.resetsAt) == [nil])
+}
+
+@Test func grokAccountNamesAnUnknownPeriodSubscription() {
     let unspecified = Data(#"{"config": {"creditUsagePercent": 5}}"#.utf8)
-    #expect(UsageLimits.grokAccount(.success(unspecified), locations: []).windows.map(\.kind) == [.monthly])
+    let account = UsageLimits.grokAccount(.success(unspecified), locations: [])
+    #expect(account.windows.map(\.kind) == [.other])
+    #expect(account.windows.map(\.label) == ["Subscription"])
+}
+
+@Test func grokAccountCountsAMissingPercentAsUnusedWhileThePeriodIsWhole() {
+    func account(_ period: String) -> UsageAccount {
+        UsageLimits.grokAccount(.success(Data(#"{"config": {"currentPeriod": \#(period)}}"#.utf8)), locations: [])
+    }
+    let weekly = account(#"{"type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-10-11T13:49:14Z", "end": "2026-10-18T13:49:14Z"}"#)
+    #expect(weekly.windows.map(\.usedPercent) == [0])
+    #expect(weekly.windows.map(\.label) == ["Weekly"])
+    #expect(account(#"{"type": "USAGE_PERIOD_TYPE_WEEKLY", "end": "2026-10-18T13:49:14Z"}"#).windows.isEmpty)
+    #expect(account(#"{"type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-10-19T00:00:00Z", "end": "2026-10-18T13:49:14Z"}"#)
+        .windows.isEmpty)
+    #expect(account(#"{"start": "2026-10-11T13:49:14Z", "end": "2026-10-18T13:49:14Z"}"#).windows.isEmpty)
+    #expect(account(#"{"type": "USAGE_PERIOD_TYPE_WEEKLY", "start": {"seconds": 1}, "end": "2026-10-18T13:49:14Z"}"#)
+        .windows.isEmpty)
 }
 
 @Test func grokAccountHasNoWindowsWithoutACreditPercent() {
@@ -304,4 +443,25 @@ private let cursorFixture = Data("""
     let account = UsageLimits.grokAccount(.failure(.status(401)), locations: ["a@b.c"])
     #expect(account.windows.isEmpty)
     #expect(account.error == "Run grok login again")
+}
+
+@Test func antigravityKeepsWindowsWhenABucketsTextFieldsChangeShape() throws {
+    let body = Data("""
+        {"groups": [{"displayName": "Gemini Models", "buckets": [
+          {"bucketId": "gemini-weekly", "window": "weekly", "remainingFraction": 0.75, "displayName": 7,
+           "description": {"text": "x"}},
+          {"bucketId": "gemini-daily", "window": "24h", "remainingFraction": 0.5, "displayName": {"text": "x"}}]}]}
+        """.utf8)
+    let account = try #require(UsageLimits.antigravityAccount([.success(body)], plan: nil, locations: ["a@b.c"]))
+    #expect(account.error == nil)
+    #expect(account.windows.map(\.label) == ["Gemini · Weekly", "Gemini · Quota"])
+}
+
+@Test func antigravityModelFallbackSkipsAMalformedModel() throws {
+    let models = Data("""
+        {"models": {"gemini-a": {"quotaInfo": {"remainingFraction": 0.5}}, "gemini-b": {"quotaInfo": 7}}}
+        """.utf8)
+    let account = try #require(UsageLimits.antigravityAccount([.success(Data("{}".utf8))], models: [.success(models)],
+                                                              plan: nil, locations: ["a@b.c"]))
+    #expect(account.windows.map(\.label) == ["Gemini · Reported quota"])
 }

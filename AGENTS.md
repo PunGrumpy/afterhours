@@ -16,7 +16,7 @@ A macOS menu bar app that keeps a Mac awake while coding agents work, plus its m
 
 ## Snapshot the menu and Settings
 
-`Afterhours --snapshot out.png [expanded] [crowded]` renders the menu with sample data and writes it to a PNG; `crowded` renders seven providers. `Afterhours --snapshot-settings out.png [general|power|agents|limits|hub]` renders one Settings tab the same way. `Afterhours --snapshot-motion out.png [limits|pool|pause]` hosts the menu in a window, flips that one state, and writes a filmstrip of frames stamped with when each was really captured, so you can judge an animation from its in-between frames. Judge a visual change by opening the PNG, not by reading the view code.
+`Afterhours --snapshot out.png [expanded] [crowded] [tall]` renders the menu with sample data and writes it to a PNG; `crowded` renders seven providers, and `tall` adds every agent and caps the height so the middle scrolls. `Afterhours --snapshot-settings out.png [general|power|agents|limits|hub]` renders one Settings tab the same way. `Afterhours --snapshot-motion out.png [limits|pool|pause]` hosts the menu in a window, flips that one state, and writes a filmstrip of frames stamped with when each was really captured, so you can judge an animation from its in-between frames. Judge a visual change by opening the PNG, not by reading the view code.
 
 ## Restart the app on a closed lid
 

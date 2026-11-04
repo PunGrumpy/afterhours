@@ -169,30 +169,100 @@ const MenuItem = ({
   </button>
 );
 
-const AgentStatus = ({ agent }: { agent: DemoAgent }) => {
-  if (agent.state === "idle") {
-    return (
-      <span className="text-white/45 contrast-more:text-white/75">Idle</span>
-    );
+const stateWords: Record<AgentState, string> = {
+  idle: "idle",
+  waiting: "needs you",
+  working: "working",
+};
+
+const sessionWords = ({ sessions, state }: DemoAgent) =>
+  `${sessions} ${state === "waiting" && sessions > 1 ? "need you" : stateWords[state]}`;
+
+const sectionStatus = (list: DemoAgent[]) => {
+  let total = 0;
+  let working = 0;
+
+  for (const agent of list) {
+    total += agent.sessions;
+
+    if (agent.state === "working") {
+      working += agent.sessions;
+    }
   }
 
-  const working = agent.state === "working";
+  const noun = total === 1 ? "session" : "sessions";
 
-  const sessions =
-    agent.sessions === 1 ? "1 session" : `${agent.sessions} sessions`;
+  if (total === 0) {
+    return "No sessions";
+  }
+
+  return working === 0
+    ? `${total} ${noun} open`
+    : `${working} of ${total} ${noun} working`;
+};
+
+const splitByRunning = (list: DemoAgent[]) => {
+  const running: DemoAgent[] = [];
+  const notRunning: DemoAgent[] = [];
+
+  for (const agent of list) {
+    (agent.sessions > 0 ? running : notRunning).push(agent);
+  }
+
+  return { notRunning, running };
+};
+
+const AgentStatus = ({ agent }: { agent: DemoAgent }) => {
+  const idle = agent.state === "idle";
 
   return (
     <>
-      <span className="text-white/55">{working ? sessions : "Needs you"}</span>
       <span
-        className={cn("size-[7px] rounded-full", {
-          "bg-mac-green": working,
-          "bg-mac-orange": !working,
-        })}
-      />
+        className={
+          idle ? "text-white/45 contrast-more:text-white/75" : "text-white/55"
+        }
+      >
+        {sessionWords(agent)}
+      </span>
+      {!idle && (
+        <span
+          className={cn("size-[7px] rounded-full", {
+            "bg-mac-green": agent.state === "working",
+            "bg-mac-orange": agent.state === "waiting",
+          })}
+        />
+      )}
     </>
   );
 };
+
+const NotRunningRow = ({
+  agents: idle,
+  onStart,
+}: {
+  agents: DemoAgent[];
+  onStart: (id: string) => void;
+}) => (
+  <div className="flex items-center gap-1.5 px-2 py-1">
+    {idle.map((agent) => (
+      <button
+        key={agent.id}
+        type="button"
+        aria-label={`${agent.name}: not running. Start a session`}
+        onClick={() => onStart(agent.id)}
+        className="transition-opacity duration-150 ease-out active:opacity-55 active:duration-0"
+      >
+        <AgentLogo
+          id={agent.id}
+          className="size-[18px] rounded-[5px] bg-white/10 text-white outline-[0.5px] -outline-offset-[0.5px] outline-white/10"
+        />
+      </button>
+    ))}
+    <span className="ml-auto text-[12px] text-white/45 tabular-nums contrast-more:text-white/75">
+      {idle.length} not running
+    </span>
+  </div>
+);
 
 const AgentRow = ({
   agent,
@@ -207,7 +277,7 @@ const AgentRow = ({
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${agent.name}: ${agent.state}. Change state`}
+      aria-label={`${agent.name}: ${sessionWords(agent)}. Change state`}
       className="flex w-full items-center gap-3 rounded-[6px] px-2 py-1 text-left transition-opacity duration-150 ease-out hover:bg-white/[0.07] active:opacity-55 active:duration-0"
     >
       <AgentLogo
@@ -419,8 +489,8 @@ const Menu = ({
 }: MenuProps) => {
   const holding = hold === "working" || hold === "waiting";
   const mood = moodFor[hold];
-  const workingCount = list.filter((a) => a.state === "working").length;
   const scroller = useRef<HTMLDivElement>(null);
+  const { running, notRunning } = splitByRunning(list);
 
   return (
     <div
@@ -428,7 +498,7 @@ const Menu = ({
       data-menu=""
       data-open={open || undefined}
       inert={!open}
-      className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(300px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 motion-reduce:[transform:none] contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
+      className="bg-menu/[0.86] transparency-reduce:bg-menu transparency-reduce:backdrop-blur-none contrast-more:bg-menu absolute inset-x-0 top-[38px] z-10 mx-auto max-h-[calc(100%-46px)] w-[min(340px,calc(100%-16px))] origin-top [transform:scale(0.97)] [scrollbar-width:none] overflow-y-auto rounded-[12px] text-white opacity-0 shadow-[0_0_0_0.5px_rgb(0_0_0/0.8),0_18px_50px_rgb(0_0_0/0.45)] ring-1 ring-white/10 backdrop-blur-2xl transition-[opacity,transform] duration-100 ease-out ring-inset data-[open]:[transform:none] data-[open]:opacity-100 data-[open]:duration-150 motion-reduce:[transform:none] contrast-more:ring-white/35 contrast-more:backdrop-blur-none md:right-2 md:left-auto md:mx-0 md:origin-[50%_0]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5">
         <div
@@ -482,15 +552,20 @@ const Menu = ({
         <div className="flex items-baseline justify-between">
           <h3 className="text-[15px] font-bold">Agents</h3>
           <span className="text-[12px] text-white/45 tabular-nums contrast-more:text-white/75">
-            {workingCount === 0 ? "None working" : `${workingCount} working`}
+            {sectionStatus(list)}
           </span>
         </div>
         <ul className="-mx-2 mt-1">
-          {list.map((agent) => (
+          {running.map((agent) => (
             <li key={agent.id}>
               <AgentRow agent={agent} onClick={() => onCycle(agent.id)} />
             </li>
           ))}
+          {notRunning.length > 0 && (
+            <li>
+              <NotRunningRow agents={notRunning} onStart={onCycle} />
+            </li>
+          )}
         </ul>
       </section>
 

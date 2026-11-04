@@ -6,9 +6,7 @@ import UserNotifications
 struct AgentSummary: Identifiable {
     let id: String
     let name: String
-    let sessions: Int
-    let working: Int
-    let waiting: Int
+    let tally: SessionTally
 }
 
 struct AgentSession: Equatable {
@@ -125,18 +123,29 @@ final class AppModel {
     }
 
     /// A model with sample state and no side effects, for rendering the menu outside the app.
-    init(preview: Preferences, crowded: Bool = false) {
+    init(preview: Preferences, crowded: Bool = false, tall: Bool = false) {
         prefs = preview
         state = .holding
         holdingSince = Date().addingTimeInterval(-83 * 60)
         battery = BatteryStatus(percent: 64, onAC: false, charging: false, minutesToEmpty: 310)
-        installedAgents = ["claude", "codex", "opencode"]
-        sessions = [
-            AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
-            AgentSession(agentId: "claude", agentName: "Claude Code", state: .working),
-            AgentSession(agentId: "codex", agentName: "Codex", state: .idle),
-        ]
+        installedAgents = tall ? Set(AgentKind.all.map(\.id)) : ["claude", "codex", "opencode"]
+        sessions = Self.sampleSessions(crowded: crowded, tall: tall)
         usage.seed(Self.sampleUsage(crowded: crowded))
+    }
+
+    /// `tall` adds every agent, each with sessions in mixed states when `crowded`, so the menu has more rows than a screen.
+    private static func sampleSessions(crowded: Bool, tall: Bool) -> [AgentSession] {
+        func sessions(_ id: String, _ name: String, _ states: [AgentState]) -> [AgentSession] {
+            states.map { AgentSession(agentId: id, agentName: name, state: $0) }
+        }
+        var result = sessions("claude", "Claude Code", [.working, .working]) + sessions("codex", "Codex", [.idle])
+        guard tall else { return result }
+        let mixes: [[AgentState]] = [[.working, .idle, .idle], [.waiting, .idle], [.idle, .idle], [.working, .waiting, .idle]]
+        let others = AgentKind.all.filter { $0.id != "claude" && $0.id != "codex" }
+        for (index, kind) in others.enumerated() where crowded || index < 2 {
+            result += sessions(kind.id, kind.displayName, crowded ? mixes[index % mixes.count] : [.idle])
+        }
+        return result
     }
 
     /// Moves a preview model to another state, so a snapshot can flip it and film the change.
@@ -147,27 +156,30 @@ final class AppModel {
         func window(_ id: String, _ kind: UsageWindow.Kind, _ label: String, _ used: Double, hours: Double) -> UsageWindow {
             UsageWindow(id: id, kind: kind, label: label, usedPercent: used, resetsAt: now.addingTimeInterval(hours * 3600))
         }
-        func claude(_ locations: [String], source: String? = nil, _ session: Double, _ weekly: Double, _ fable: Double,
-                    hours: Double) -> UsageAccount {
-            UsageAccount(provider: "claude", plan: "Max", locations: locations, source: source, windows: [
-                window("five_hour", .session, "Session", session, hours: hours),
+        func claude(_ locations: [String], source: String? = nil, session: Double?, _ weekly: Double, _ fable: Double,
+                    spend: Double? = nil, hours: Double) -> UsageAccount {
+            let windows = [
+                session.map { window("five_hour", .session, "Session", $0, hours: hours) },
                 window("seven_day", .weekly, "Weekly", weekly, hours: 20 + hours),
                 window("seven_day_fable", .weekly, "Weekly · Fable", fable, hours: 20 + hours),
-            ])
+                spend.map { UsageWindow(id: "monthly_spend", kind: .monthly, label: "Monthly spend", usedPercent: $0, resetsAt: nil) },
+            ]
+            return UsageAccount(provider: "claude", plan: "Ultra", locations: locations, source: source,
+                                windows: windows.compactMap { $0 })
         }
         var accounts = [
-            claude(["~/.claude", "~/.claude-nipa"], 2, 70, 100, hours: 1.3),
-            claude(["~/.claude-pun"], 8, 50, 58, hours: 2.1),
-            claude(["team@example.com"], source: "Thaipass", 60, 91, 72, hours: 4.0),
+            claude(["~/.claude", "~/.claude-nipa"], session: 2, 70, 100, spend: 18, hours: 1.3),
+            claude(["~/.claude-pun"], session: 8, 50, 58, spend: 4, hours: 2.1),
+            claude(["team@example.com"], source: "Thaipass", session: nil, 91, 72, hours: 4.0),
             UsageAccount(provider: "codex", plan: "Pro", locations: ["~/.codex"], windows: [
                 window("primary", .session, "Session", 12, hours: 3.7),
                 window("secondary", .weekly, "Weekly", 34, hours: 88),
             ]),
             UsageAccount(provider: "antigravity", plan: "Google AI Pro", locations: ["you@example.com"], windows: [
-                window("gemini-weekly", .weekly, "Weekly · Gemini", 9, hours: 150),
-                window("gemini-5h", .session, "Session · Gemini", 8, hours: 4.2),
-                window("3p-weekly", .weekly, "Weekly · Claude & GPT", 0, hours: 167),
-                window("3p-5h", .session, "Session · Claude & GPT", 0, hours: 5),
+                window("gemini-weekly", .weekly, "Gemini · Weekly", 9, hours: 150),
+                window("gemini-5h", .session, "Gemini · 5-hour", 8, hours: 4.2),
+                window("3p-weekly", .weekly, "Claude & GPT (shared) · Weekly", 0, hours: 167),
+                window("3p-5h", .session, "Claude & GPT (shared) · 5-hour", 0, hours: 5),
             ]),
         ]
         if crowded {
@@ -176,7 +188,8 @@ final class AppModel {
                     window("month", .monthly, "Monthly", 41, hours: 300),
                 ]),
                 UsageAccount(provider: "cursor", plan: "Pro", locations: ["~/.cursor"], windows: [
-                    window("plan", .weekly, "Plan", 58, hours: 120),
+                    window("auto", .monthly, "Cursor Models", 58, hours: 300),
+                    window("api", .monthly, "Other Models", 12, hours: 300),
                 ]),
                 UsageAccount(provider: "copilot", plan: "Pro", locations: ["~/.config/github-copilot"], windows: [
                     window("premium", .weekly, "Premium requests", 85, hours: 200),
@@ -474,21 +487,28 @@ final class AppModel {
 
     var workingCount: Int { sessions.filter { $0.state == .working }.count }
 
+    var sessionTally: SessionTally { SessionTally(sessions.map(\.state)) }
+
     var agentSummaries: [AgentSummary] {
         let byAgent = Dictionary(grouping: sessions, by: \.agentId)
         let known = AgentKind.all.map(\.id)
         let ids = known.filter { installedAgents.contains($0) || byAgent[$0] != nil }
             + byAgent.keys.filter { !known.contains($0) }.sorted()
-        return ids.map { id in
+        let summaries = ids.map { id in
             let group = byAgent[id] ?? []
             return AgentSummary(
                 id: id,
                 name: AgentKind.named(id)?.displayName ?? group.first?.agentName ?? id,
-                sessions: group.count,
-                working: group.filter { $0.state == .working }.count,
-                waiting: group.filter { $0.state == .waiting }.count
+                tally: SessionTally(group.map(\.state))
             )
         }
+        // Agents with sessions first, and among them the ones that need a look; the order is otherwise kept.
+        func rank(_ summary: AgentSummary) -> Int {
+            if summary.tally.working > 0 { return 0 }
+            if summary.tally.waiting > 0 { return 1 }
+            return summary.tally.total > 0 ? 2 : 3
+        }
+        return summaries.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
     /// How long the battery lasts before the hold ends, at the cutoff if one applies, while holding on battery.
@@ -509,8 +529,8 @@ final class AppModel {
         case (0, .waitingForYou(until: nil)): "Waiting for you while agent sessions are open."
         case (0, .waitingForYou(let until?)):
             "Waiting for you until \(until.formatted(date: .omitted, time: .shortened))."
-        case (1, _): "1 agent working"
-        default: "\(workingCount) agents working"
+        case (1, _): "1 session working"
+        default: "\(workingCount) sessions working"
         }
     }
 

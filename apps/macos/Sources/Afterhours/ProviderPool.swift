@@ -54,7 +54,7 @@ struct ProviderPool: Identifiable {
         let order = known.filter { byProvider[$0] != nil } + byProvider.keys.filter { !known.contains($0) }.sorted()
         return order.map { provider in
             let sorted = byProvider[provider]!.sorted { sessionReset($0) < sessionReset($1) }
-            return ProviderPool(provider: provider, accounts: sorted, windows: pooledWindows(sorted),
+            return ProviderPool(provider: provider, accounts: sorted, windows: pooledWindows(sorted, provider: provider),
                                 errors: sorted.compactMap { account in
                                     account.error.map { "\(account.locations.joined(separator: " ")): \($0)" }
                                 })
@@ -65,14 +65,14 @@ struct ProviderPool: Identifiable {
         account.windows.first { $0.kind == .session }?.resetsAt ?? account.windows.first?.resetsAt ?? .distantFuture
     }
 
-    private static func pooledWindows(_ accounts: [UsageAccount]) -> [Window] {
+    private static func pooledWindows(_ accounts: [UsageAccount], provider: String) -> [Window] {
         var order: [String] = []
         var first: [String: UsageWindow] = [:]
         for window in accounts.flatMap(\.windows) where first[window.id] == nil {
             order.append(window.id)
             first[window.id] = window
         }
-        return order.map { id in
+        let windows = order.map { id in
             let template = first[id]!
             let segments = accounts.map { $0.windows.first { $0.id == id } }
             let present = segments.compactMap { $0?.usedPercent }
@@ -80,6 +80,18 @@ struct ProviderPool: Identifiable {
                           usedPercent: present.reduce(0, +) / Double(max(present.count, 1)),
                           resetsAt: segments.compactMap { $0?.resetsAt }.min(), segments: segments)
         }
-        .sorted { ($0.kind, order.firstIndex(of: $0.id)!) < ($1.kind, order.firstIndex(of: $1.id)!) }
+        let position = { (window: Window) in order.firstIndex(of: window.id)! }
+        guard provider == "antigravity" else {
+            return windows.sorted { ($0.kind, position($0)) < ($1.kind, position($1)) }
+        }
+        // Gemini first, then each family's 5-hour, weekly and quota rows together.
+        func key(_ window: Window) -> (Int, String, UsageWindow.Kind, Int) {
+            var family = window.id
+            if let suffix = ["-5h", "-weekly", "-quota"].first(where: family.hasSuffix) {
+                family.removeLast(suffix.count)
+            }
+            return (window.id.hasPrefix("gemini-") ? 0 : 1, family, window.kind, position(window))
+        }
+        return windows.sorted { key($0) < key($1) }
     }
 }

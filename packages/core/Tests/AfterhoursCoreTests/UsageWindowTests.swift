@@ -41,10 +41,18 @@ private func window(used: Double, resetsIn: TimeInterval?, now: Date) -> UsageWi
     #expect(abs(runsOut.timeIntervalSince(now) - 6000) < 1)
 }
 
-@Test func kindsOrderSessionBeforeWeeklyBeforeMonthly() {
+@Test func kindsOrderSessionBeforeWeeklyBeforeMonthlyBeforeOther() {
     #expect(UsageWindow.Kind.session < .weekly)
     #expect(UsageWindow.Kind.weekly < .monthly)
+    #expect(UsageWindow.Kind.monthly < .other)
     #expect(UsageWindow.Kind.weekly.defaultDuration == 7 * 24 * 3600)
+}
+
+@Test func aWindowOfNoStatedLengthHasNoPace() {
+    let now = Date()
+    let other = UsageWindow(id: "q", kind: .other, label: "Quota", usedPercent: 50, resetsAt: now.addingTimeInterval(3600))
+    #expect(other.duration == 0)
+    #expect(other.pace(now: now) == nil)
 }
 
 private func utc(_ text: String) throws -> Date { try #require(UsageLimits.parseISO8601(text)) }

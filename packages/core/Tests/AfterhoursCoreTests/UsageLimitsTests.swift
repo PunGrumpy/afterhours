@@ -111,6 +111,78 @@ private let claudeFixture = Data("""
     #expect(account.id == "local:claude:~/.claude")
 }
 
+@Test func claudeAccountNamesScopedWindowsByTheirModel() {
+    let body = Data("""
+        {"seven_day": {"utilization": 10},
+         "limits": [{"kind": "weekly_scoped", "percent": 5, "scope": {"model": {"display_name": "Claude Sonnet 4.5"}}}]}
+        """.utf8)
+    let account = UsageLimits.claudeAccount(.success(body), plan: nil, locations: ["~/.claude"], source: nil)
+    #expect(account.windows.map(\.id) == ["seven_day", "seven_day_claude_sonnet_4_5"])
+    #expect(account.windows.map(\.label) == ["Weekly", "Weekly · Claude Sonnet 4.5"])
+}
+
+@Test(arguments: [
+    ("max", "default_claude_max_20x", "Ultra"),
+    ("max", "default_claude_max_5x", "Max"),
+    ("max", nil, "Max"),
+    ("Max Plan", nil, "Max"),
+    ("max_20", nil, "Ultra"),
+    ("claude_max_20x_subscription", nil, "Ultra"),
+    ("claude_max_5x_subscription", nil, "Max"),
+    ("claude_max_subscription", nil, "Max"),
+    ("pro", "default_claude_pro", "Pro"),
+    ("claude_pro_subscription", nil, "Pro"),
+    ("team", nil, "Team"),
+    ("enterprise", nil, "Enterprise"),
+    ("claude_free_subscription", nil, "Free"),
+    ("edu", nil, "Edu"),
+])
+func claudePlanNameFollowsTheRenamedPlans(type: String, tier: String?, name: String) {
+    #expect(UsageLimits.claudePlanName(subscriptionType: type, rateLimitTier: tier) == name)
+}
+
+private func claudeWindows(_ json: String) -> [UsageWindow] {
+    UsageLimits.claudeAccount(.success(Data(json.utf8)), plan: nil, locations: ["~/.claude"], source: nil).windows
+}
+
+@Test func claudeAccountReportsASpendBudgetWithALimit() throws {
+    let windows = claudeWindows("""
+        {"five_hour": null, "seven_day": {"utilization": 10},
+         "spend": {"enabled": true, "percent": 25,
+                   "used": {"amount_minor": 2500, "currency": "USD", "exponent": 2},
+                   "limit": {"amount_minor": 20000, "currency": "USD", "exponent": 2}}}
+        """)
+    #expect(windows.map(\.id) == ["seven_day", "monthly_spend"])
+    let spend = try #require(windows.last)
+    #expect(spend.label == "Monthly spend")
+    #expect(spend.kind == .monthly)
+    #expect(spend.usedPercent == 12.5)
+    #expect(spend.resetsAt == nil)
+    #expect(spend.pace() == nil)
+}
+
+@Test func claudeAccountFallsBackToExtraUsageWithoutASpendLimit() {
+    let unlimitedSpend = #""spend": {"enabled": true, "limit": null, "used": {"amount_minor": 5, "currency": "USD", "exponent": 2}}"#
+    let utilization = claudeWindows(#"{\#(unlimitedSpend), "extra_usage": {"is_enabled": true, "monthly_limit": null, "utilization": 12.5}}"#)
+    #expect(utilization.map(\.usedPercent) == [12.5])
+    let credits = claudeWindows(#"{\#(unlimitedSpend), "extra_usage": {"is_enabled": true, "monthly_limit": 20000, "used_credits": 3000, "utilization": 99}}"#)
+    #expect(credits.map(\.usedPercent) == [15])
+    let mismatched = claudeWindows("""
+        {"spend": {"enabled": true, "used": {"amount_minor": 5, "currency": "USD", "exponent": 2},
+                   "limit": {"amount_minor": 100, "currency": "EUR", "exponent": 2}},
+         "extra_usage": {"is_enabled": true, "utilization": 40}}
+        """)
+    #expect(mismatched.map(\.usedPercent) == [40])
+}
+
+@Test func claudeAccountShowsNoSpendWhenItIsOffOrUnreadable() {
+    #expect(claudeWindows(#"{"seven_day": {"utilization": 10}, "extra_usage": {"is_enabled": false, "utilization": 40}}"#)
+        .map(\.id) == ["seven_day"])
+    // A budget that changes shape must not cost the windows around it.
+    let garbled = claudeWindows(#"{"seven_day": {"utilization": 10}, "spend": "n/a", "extra_usage": [1]}"#)
+    #expect(garbled.map(\.id) == ["seven_day"])
+}
+
 @Test func claudeAccountTurnsAuthFailuresIntoASignInHint() {
     let account = UsageLimits.claudeAccount(.failure(.status(401)), plan: nil, locations: ["~/.claude"], source: nil)
     #expect(account.windows.isEmpty)
@@ -141,6 +213,21 @@ private let codexFixture = Data("""
     #expect(account.windows.map(\.kind) == [.session, .weekly])
     #expect(account.windows.map(\.duration) == [18000, 604800])
     #expect(account.windows[0].resetsAt == Date(timeIntervalSince1970: 1_790_000_000))
+}
+
+@Test(arguments: ["free", "go"])
+func codexAccountReadsAPrimaryWindowWithoutALengthAsAMonthOnFreeAndGo(plan: String) {
+    let body = Data(#"{"plan_type": "\#(plan)", "rate_limit": {"primary_window": {"used_percent": 5}, "secondary_window": {"used_percent": 6}}}"#.utf8)
+    let account = UsageLimits.codexAccount(.success(body), fallbackPlan: nil, locations: ["~/.codex"], source: nil)
+    #expect(account.windows.map(\.kind) == [.monthly, .weekly])
+    #expect(account.windows.map(\.label) == ["Monthly", "Weekly"])
+    #expect(account.windows[0].duration == 30 * 24 * 3600)
+}
+
+@Test func codexAccountUsesTheHubPlanToChooseTheFallbackWindow() {
+    let body = Data(#"{"rate_limit": {"primary_window": {"used_percent": 5}}}"#.utf8)
+    let account = UsageLimits.codexAccount(.success(body), fallbackPlan: "go", locations: ["a@b.c"], source: "Hub")
+    #expect(account.windows.map(\.kind) == [.monthly])
 }
 
 @Test func codexAccountFallsBackToTheHubPlanWhenTheResponseHasNone() {

@@ -226,9 +226,11 @@ extension UsageLimits {
                                 error: error.message(signIn: "Sign in to Cursor again"))
         case .success(let usage):
             let resetsAt = usage.billingCycleEnd.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0 / 1000) : nil }
-            let windows = [("total", "Plan", usage.planUsage?.totalPercentUsed),
-                           ("auto", "Auto", usage.planUsage?.autoPercentUsed),
-                           ("api", "API", usage.planUsage?.apiPercentUsed)]
+            let hasBothPools = usage.planUsage?.autoPercentUsed != nil && usage.planUsage?.apiPercentUsed != nil
+            // Overall is the two pools combined, so it adds nothing once both are shown.
+            let windows = [("total", "Overall", hasBothPools ? nil : usage.planUsage?.totalPercentUsed),
+                           ("auto", "Cursor Models", usage.planUsage?.autoPercentUsed),
+                           ("api", "Other Models", usage.planUsage?.apiPercentUsed)]
                 .compactMap { id, label, used in
                     used.map { UsageWindow(id: id, kind: .monthly, label: label, usedPercent: $0, resetsAt: resetsAt) }
                 }
@@ -241,6 +243,7 @@ extension UsageLimits {
     private struct GrokBilling: Decodable {
         struct Period: Decodable {
             let type: String?
+            let start: Lenient<String>?
             let end: String?
         }
 
@@ -270,13 +273,22 @@ extension UsageLimits {
             return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [],
                                 error: error.message(signIn: "Run grok login again"))
         case .success(let billing):
-            guard let used = billing.config?.creditUsagePercent else {
-                return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [])
+            let period = billing.config?.currentPeriod
+            let type = period?.type?.replacingOccurrences(of: "USAGE_PERIOD_TYPE_", with: "")
+            let (kind, label): (UsageWindow.Kind, String) = switch type {
+            case "WEEKLY": (.weekly, "Weekly")
+            case "MONTHLY": (.monthly, "Monthly")
+            default: (.other, "Subscription")
             }
-            let period = billing.config?.currentPeriod?.type?.replacingOccurrences(of: "USAGE_PERIOD_TYPE_", with: "")
-            let kind: UsageWindow.Kind = period == "WEEKLY" ? .weekly : .monthly
-            let window = UsageWindow(id: "credits", kind: kind, label: kind == .weekly ? "Weekly" : "Monthly",
-                                     usedPercent: used, resetsAt: billing.config?.currentPeriod?.end.flatMap(parseISO8601))
+            let resetsAt = period?.end.flatMap(parseISO8601)
+            var used = billing.config?.creditUsagePercent
+            // Grok leaves out a zero percentage but still sends the whole period.
+            if used == nil, kind != .other, let start = period?.start?.value.flatMap(parseISO8601),
+               let end = resetsAt, start < end {
+                used = 0
+            }
+            guard let used else { return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: []) }
+            let window = UsageWindow(id: "credits", kind: kind, label: label, usedPercent: used, resetsAt: resetsAt)
             return UsageAccount(provider: "grok", plan: nil, locations: locations, windows: [window])
         }
     }
@@ -305,6 +317,8 @@ extension UsageLimits {
         struct Bucket: Decodable {
             let bucketId: String
             let window: String?
+            let displayName: Lenient<String>?
+            let description: Lenient<String>?
             let remainingFraction: Double?
             let resetTime: String?
             let disabled: Bool?
@@ -317,6 +331,22 @@ extension UsageLimits {
 
         let groups: [Group]?
         let buckets: [Bucket]?
+    }
+
+    /// Older accounts report quotas per model instead of in a summary.
+    private struct AntigravityModels: Decodable {
+        struct Quota: Decodable {
+            let remainingFraction: Double?
+            let resetTime: String?
+        }
+
+        struct Model: Decodable {
+            let modelProvider: String?
+            let quotaInfo: Quota?
+            let weeklyQuotaInfo: Quota?
+        }
+
+        let models: [String: Lenient<Model>]?
     }
 
     private struct AntigravitySession {
@@ -336,7 +366,7 @@ extension UsageLimits {
         #else
         let architecture = "x64"
         #endif
-        return "antigravity/hub/1.0.0 (aidev_client; os_type=darwin; arch=\(architecture); cl=963137146)"
+        return "antigravity/hub/2.24.0 (aidev_client; os_type=darwin; arch=\(architecture); cl=963137146)"
     }()
 
     /// Access tokens by refresh token, so Google is asked for a new one once an hour instead of on every read.
@@ -379,12 +409,18 @@ extension UsageLimits {
                 accounts.append(UsageAccount(provider: "antigravity", plan: nil, locations: [location], windows: [],
                                              error: error.message(signIn: antigravitySignIn)))
             case .success(let session):
-                let result = await antigravityCall("retrieveUserQuotaSummary", token: session.accessToken,
-                                                   body: login.projectId.map { ["project": $0] } ?? [:])
-                if case .failure(.status(401)) = result {
+                let body = login.projectId.map { ["project": $0] } ?? [:]
+                let requestedAt = Date()
+                let summaries = await antigravityCallAll("retrieveUserQuotaSummary", token: session.accessToken, body: body)
+                if summaries.contains(where: antigravityRejectedToken) {
                     antigravitySessions.withLock { $0[login.refreshToken] = nil }
                 }
-                if let account = antigravityAccount(result, plan: session.plan, locations: [location]) {
+                let needsModels = antigravitySummaryWindows(summaries, requestedAt: requestedAt).isEmpty
+                    && !summaries.contains(where: antigravityRejectedToken)
+                let models = needsModels
+                    ? await antigravityCallAll("fetchAvailableModels", token: session.accessToken, body: body) : []
+                if let account = antigravityAccount(summaries, models: models, plan: session.plan,
+                                                    locations: [location], requestedAt: requestedAt) {
                     accounts.append(account)
                 }
             }
@@ -434,62 +470,169 @@ extension UsageLimits {
         }
     }
 
+    private static func antigravityRejectedToken(_ result: Result<Data, FetchError>) -> Bool {
+        if case .failure(let error) = result { return error.isUnauthorized }
+        return false
+    }
+
+    private static func antigravityRequest(host: String, operation: String, token: String,
+                                           body: [String: String]) async -> Result<Data, FetchError> {
+        guard let url = URL(string: "\(host)/v1internal:\(operation)") else {
+            return .failure(.network("Antigravity has no usage endpoint"))
+        }
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(antigravityUserAgent, forHTTPHeaderField: "User-Agent")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return await send(request)
+    }
+
     /// Answers with the first host that succeeds or rejects the token, or the last one's failure.
     private static func antigravityCall(_ operation: String, token: String,
                                         body: [String: String]) async -> Result<Data, FetchError> {
         var result: Result<Data, FetchError> = .failure(.network("Antigravity has no usage endpoint"))
         for host in antigravityHosts {
-            guard let url = URL(string: "\(host)/v1internal:\(operation)") else { continue }
-            var request = URLRequest(url: url, timeoutInterval: timeout)
-            request.httpMethod = "POST"
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(antigravityUserAgent, forHTTPHeaderField: "User-Agent")
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-            result = await send(request)
+            result = await antigravityRequest(host: host, operation: operation, token: token, body: body)
             if !antigravityTriesNextHost(after: result) { break }
         }
         return result
     }
 
-    /// Nil when the account reports no five-hour or weekly allowance, as with an API key or a Cloud project.
-    static func antigravityAccount(_ result: Result<Data, FetchError>, plan: String?,
-                                   locations: [String]) -> UsageAccount? {
-        let quota: AntigravityQuota
-        switch result.flatMap({ decode(AntigravityQuota.self, from: $0) }) {
-        case .failure(let error):
-            return UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: [],
-                                error: error.message(signIn: antigravitySignIn))
-        case .success(let decoded):
-            quota = decoded
+    /// Asks every host at once, because their quota groups differ and the answers get merged.
+    private static func antigravityCallAll(_ operation: String, token: String,
+                                           body: [String: String]) async -> [Result<Data, FetchError>] {
+        await withTaskGroup(of: (Int, Result<Data, FetchError>).self) { group in
+            for (index, host) in antigravityHosts.enumerated() {
+                group.addTask { (index, await antigravityRequest(host: host, operation: operation, token: token, body: body)) }
+            }
+            var results: [(Int, Result<Data, FetchError>)] = []
+            for await result in group { results.append(result) }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
+    }
+
+    /// Nil when the account reports no allowance at all, as with an API key or a Cloud project.
+    static func antigravityAccount(_ summaries: [Result<Data, FetchError>], models: [Result<Data, FetchError>] = [],
+                                   plan: String?, locations: [String], requestedAt: Date = Date()) -> UsageAccount? {
+        var windows = antigravitySummaryWindows(summaries, requestedAt: requestedAt)
+        if windows.isEmpty { windows = antigravityModelWindows(models) }
+        if !windows.isEmpty {
+            return UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: windows)
+        }
+        let decoded = summaries.map { $0.flatMap { decode(AntigravityQuota.self, from: $0) } }
+        let failures = decoded.compactMap { result -> FetchError? in
+            if case .failure(let error) = result { return error }
+            return nil
+        }
+        // Any host that answered means the account simply has nothing to report.
+        guard failures.count == decoded.count, let error = failures.first(where: \.isUnauthorized) ?? failures.first
+        else { return nil }
+        return UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: [],
+                            error: error.message(signIn: antigravitySignIn))
+    }
+
+    private static func antigravitySummaryWindows(_ summaries: [Result<Data, FetchError>],
+                                                  requestedAt: Date) -> [UsageWindow] {
+        mostUsed(summaries.flatMap { result -> [UsageWindow] in
+            guard let quota = try? result.flatMap({ decode(AntigravityQuota.self, from: $0) }).get() else { return [] }
+            return antigravityWindows(quota, requestedAt: requestedAt)
+        })
+    }
+
+    private static func antigravityModelWindows(_ models: [Result<Data, FetchError>]) -> [UsageWindow] {
+        mostUsed(models.flatMap { result -> [UsageWindow] in
+            // Model ids are dictionary keys, which the snake-case decoder would rewrite.
+            guard let data = try? result.get(), let decoded = try? JSONDecoder().decode(AntigravityModels.self, from: data)
+            else { return [] }
+            return antigravityWindows(decoded)
+        })
+    }
+
+    /// One window per id, keeping the most used reading and the order ids first appeared in.
+    private static func mostUsed(_ windows: [UsageWindow]) -> [UsageWindow] {
+        var order: [String] = []
+        var best: [String: UsageWindow] = [:]
+        for window in windows {
+            if let previous = best[window.id] {
+                if window.usedPercent > previous.usedPercent { best[window.id] = window }
+            } else {
+                order.append(window.id)
+                best[window.id] = window
+            }
+        }
+        return order.compactMap { best[$0] }
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        text.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private static func antigravityWindows(_ quota: AntigravityQuota, requestedAt: Date) -> [UsageWindow] {
         var groups = (quota.groups ?? []).filter { $0.buckets?.isEmpty == false }
         if groups.isEmpty { groups = [AntigravityQuota.Group(displayName: nil, buckets: quota.buckets)] }
         var windows: [UsageWindow] = []
         for group in groups {
             for bucket in group.buckets ?? [] where bucket.disabled != true {
-                let (kind, span): (UsageWindow.Kind, String)
-                switch bucket.window {
-                case "5h": (kind, span) = (.session, "Session")
-                case "weekly": (kind, span) = (.weekly, "Weekly")
-                default: continue
-                }
-                guard let left = bucket.remainingFraction, !windows.contains(where: { $0.id == bucket.bucketId })
-                else { continue }
+                guard let left = bucket.remainingFraction, left.isFinite else { continue }
                 let family: String
-                if bucket.bucketId.hasPrefix("gemini-") {
+                if bucket.bucketId.hasPrefix("gemini-argon-") {
+                    // Argon is metered apart from the default Gemini buckets, so it keeps its group's name.
+                    family = nonEmpty(group.displayName) ?? "Gemini Argon"
+                } else if bucket.bucketId.hasPrefix("gemini-") {
                     family = "Gemini"
                 } else if bucket.bucketId.hasPrefix("3p-") {
-                    family = "Claude & GPT"  // Both draw on one allowance.
+                    family = "Claude & GPT (shared)"  // Both draw on one allowance.
                 } else {
-                    family = group.displayName?.trimmingCharacters(in: .whitespaces) ?? bucket.bucketId
+                    family = nonEmpty(group.displayName) ?? bucket.bucketId
                 }
-                windows.append(UsageWindow(id: bucket.bucketId, kind: kind, label: "\(span) · \(family)",
-                                           usedPercent: (1 - left) * 100,
-                                           resetsAt: bucket.resetTime.flatMap(parseISO8601)))
+                let kind: UsageWindow.Kind
+                let span: String
+                let duration: TimeInterval?
+                switch bucket.window {
+                case "5h": (kind, span, duration) = (.session, "5-hour", 5 * 3600)
+                case "weekly": (kind, span, duration) = (.weekly, "Weekly", 7 * 24 * 3600)
+                default: (kind, span, duration) = (.other, nonEmpty(bucket.displayName?.value) ?? "Quota", nil)
+                }
+                var resetsAt = bucket.resetTime.flatMap(parseISO8601)
+                // A bucket nobody has used reports a reset one full window ahead of every request, which says nothing.
+                if left == 1, bucket.description == nil, let duration, let reset = resetsAt,
+                   abs(reset.timeIntervalSince(requestedAt) - duration) <= 60 {
+                    resetsAt = nil
+                }
+                windows.append(UsageWindow(id: bucket.bucketId, kind: kind, label: "\(family) · \(span)",
+                                           usedPercent: (1 - min(1, max(0, left))) * 100, resetsAt: resetsAt,
+                                           duration: duration))
             }
         }
-        return windows.isEmpty ? nil
-            : UsageAccount(provider: "antigravity", plan: plan, locations: locations, windows: windows)
+        return windows
+    }
+
+    private static func antigravityWindows(_ models: AntigravityModels) -> [UsageWindow] {
+        var windows: [UsageWindow] = []
+        for (modelId, entry) in (models.models ?? [:]).sorted(by: { $0.key < $1.key }) {
+            guard let model = entry.value else { continue }
+            let family: String
+            if model.modelProvider == "MODEL_PROVIDER_GOOGLE" || modelId.hasPrefix("gemini-") {
+                family = "Gemini"
+            } else if model.modelProvider == "MODEL_PROVIDER_ANTHROPIC" || modelId.hasPrefix("claude-") {
+                family = "Claude"
+            } else if model.modelProvider == "MODEL_PROVIDER_OPENAI" || modelId.hasPrefix("gpt-") {
+                family = "GPT"
+            } else {
+                continue
+            }
+            for (suffix, quota) in [("quota", model.quotaInfo), ("weekly", model.weeklyQuotaInfo)] {
+                guard let quota, let left = quota.remainingFraction, left.isFinite else { continue }
+                let weekly = suffix == "weekly"
+                windows.append(UsageWindow(id: "\(family.lowercased())-\(suffix)", kind: weekly ? .weekly : .other,
+                                           label: "\(family) · \(weekly ? "Weekly" : "Reported quota")",
+                                           usedPercent: (1 - min(1, max(0, left))) * 100,
+                                           resetsAt: quota.resetTime.flatMap(parseISO8601),
+                                           duration: weekly ? 7 * 24 * 3600 : nil))
+            }
+        }
+        return windows
     }
 }

@@ -125,6 +125,8 @@ struct MenuView: View, Themed {
     @Bindable var prefs: Preferences
     /// Rendering to an image: no window to watch, and the window's own chrome is drawn here instead.
     var snapshot = false
+    /// With `snapshot`, caps the menu's height the way the screen would, so the scrolling middle can be checked.
+    var previewMaxHeight: CGFloat?
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorSchemeContrast) var contrast
@@ -135,8 +137,80 @@ struct MenuView: View, Themed {
     @State private var shownAt: Date?
     /// The last error text, kept while the error row folds away so its words don't vanish first.
     @State private var shownError = ""
+    /// The middle's height without a cap, which the pinned header and footer leave to scroll when it won't fit.
+    @State private var contentHeight: CGFloat = 0
+    @State private var topHeight: CGFloat = 0
+    @State private var bottomHeight: CGFloat = 0
+    /// The tallest the whole menu may be on the screen its window is on.
+    @State private var windowLimit: CGFloat?
+
+    private var maxHeight: CGFloat? { previewMaxHeight ?? windowLimit }
+
+    /// Nil until everything is measured, so the menu is never capped before it knows by how much.
+    private var bodyHeight: CGFloat? {
+        guard let maxHeight, contentHeight > 0 else { return nil }
+        return min(contentHeight, max(0, maxHeight - topHeight - bottomHeight))
+    }
+
+    /// ImageRenderer can't draw a scroll view, so a plain snapshot lays the middle out in full instead.
+    private var scrolls: Bool { !snapshot || previewMaxHeight != nil }
 
     var body: some View {
+        VStack(spacing: 0) {
+            pinnedTop
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topHeight = $0 }
+            if scrolls {
+                ScrollView {
+                    middle
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                }
+                .scrollIndicators(.never)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: bodyHeight)
+                .overlay(alignment: .bottom) {
+                    // The middle's own last divider has scrolled out of view.
+                    if let bodyHeight, bodyHeight < contentHeight { divider }
+                }
+            } else {
+                middle
+            }
+            pinnedBottom
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomHeight = $0 }
+        }
+        .frame(width: 340)
+        .foregroundStyle(.white)
+        .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
+        .background {
+            if !snapshot {
+                MenuWindow(onVisibility: { visible in
+                    shownAt = visible ? Date() : nil
+                    if visible { model.menuOpened() }
+                }, onScreen: { visible in
+                    windowLimit = MenuGeometry.maximumHeight(visibleFrame: visible)
+                })
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))
+        .overlay {
+            if snapshot {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(palette.hairline, lineWidth: 1)
+            }
+        }
+        .padding(snapshot ? 24 : 0)
+        .background(snapshot ? Color(red: 0.16, green: 0.18, blue: 0.24) : .clear)
+        .environment(\.menuShownAt, snapshot ? .distantPast : shownAt)
+        .onChange(of: model.lastError, initial: true) { _, error in
+            if let error { shownError = error }
+        }
+        .animation(reduceMotion ? nil : Motion.settle, value: model.lastError != nil)
+        .animation(reduceMotion ? nil : Motion.settle, value: showsLidWarning)
+        .animation(Motion.fade, value: model.usage.accounts.isEmpty)
+        .animation(reduceMotion ? nil : Motion.settle, value: prefs.limitsExpanded)
+        .animation(reduceMotion ? nil : Motion.settle, value: openPools)
+    }
+
+    /// Stays in view however far the middle scrolls.
+    private var pinnedTop: some View {
         VStack(spacing: 0) {
             header
             Collapsible(expanded: model.lastError != nil, reduceMotion: reduceMotion) {
@@ -162,11 +236,22 @@ struct MenuView: View, Themed {
                 .padding(.bottom, 10)
             }
             divider
+        }
+    }
+
+    private var middle: some View {
+        VStack(spacing: 0) {
             BatterySection(battery: model.battery, prefs: prefs, timeLeft: model.holdTimeLeft)
             divider
             agents
             divider
             limits
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var pinnedBottom: some View {
+        VStack(spacing: 0) {
             pause
             divider
             VStack(spacing: 2) {
@@ -182,34 +267,6 @@ struct MenuView: View, Themed {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
         }
-        .frame(width: 300)
-        .foregroundStyle(.white)
-        .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
-        .background {
-            if !snapshot {
-                MenuWindow { visible in
-                    shownAt = visible ? Date() : nil
-                    if visible { model.menuOpened() }
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))
-        .overlay {
-            if snapshot {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(palette.hairline, lineWidth: 1)
-            }
-        }
-        .padding(snapshot ? 24 : 0)
-        .background(snapshot ? Color(red: 0.16, green: 0.18, blue: 0.24) : .clear)
-        .environment(\.menuShownAt, snapshot ? .distantPast : shownAt)
-        .onChange(of: model.lastError, initial: true) { _, error in
-            if let error { shownError = error }
-        }
-        .animation(reduceMotion ? nil : Motion.settle, value: model.lastError != nil)
-        .animation(reduceMotion ? nil : Motion.settle, value: showsLidWarning)
-        .animation(Motion.fade, value: model.usage.accounts.isEmpty)
-        .animation(reduceMotion ? nil : Motion.settle, value: prefs.limitsExpanded)
-        .animation(reduceMotion ? nil : Motion.settle, value: openPools)
     }
 
     private var isPaused: Bool {
@@ -267,11 +324,13 @@ struct MenuView: View, Themed {
 
     private var agents: some View {
         let summaries = model.agentSummaries
+        let running = summaries.filter { $0.tally.total > 0 }
+        let idle = summaries.filter { $0.tally.total == 0 }
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 SectionTitle("Agents")
                 Spacer()
-                Text(model.workingCount == 0 ? "None working" : "\(model.workingCount) working")
+                Text(model.sessionTally.sectionStatus)
                     .font(.system(size: 12).monospacedDigit())
                     .foregroundStyle(palette.tertiaryText)
             }
@@ -281,7 +340,8 @@ struct MenuView: View, Themed {
                     .foregroundStyle(palette.tertiaryText)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(summaries) { AgentRow(summary: $0) }
+                    ForEach(running) { AgentRow(summary: $0) }
+                    if !idle.isEmpty { NotRunningRow(agents: idle) }
                 }
             }
         }
@@ -487,40 +547,88 @@ private struct AgentRow: View, Themed {
     let summary: AgentSummary
     @Environment(\.colorSchemeContrast) var contrast
 
+    private var tally: SessionTally { summary.tally }
+    private var isActive: Bool { tally.working + tally.waiting > 0 }
+
+    /// Changes with the kind of status, not its count, so "1 working" becoming "2 working" stays in place.
+    private var statusKey: String { tally.waiting > 0 ? "waiting" : tally.working > 0 ? "working" : "idle" }
+
+    private var dot: Color? {
+        if tally.waiting > 0 { return Palette.orange }
+        return tally.working > 0 ? Palette.green : nil
+    }
+
     var body: some View {
+        // The idle count is the first thing to go when the row is tight; the full text stays in the tooltip.
+        ViewThatFits(in: .horizontal) {
+            row(tally.rowStatus)
+            // Only working or waiting counts can stand alone; an all-idle row keeps its one status.
+            if tally.working + tally.waiting > 0 {
+                row(tally.rowStatus.filter { !$0.hasSuffix("idle") })
+            }
+        }
+        .animation(Motion.fade, value: statusKey)
+        .help(tally.rowStatus.joined(separator: " · "))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func row(_ parts: [String]) -> some View {
         HStack(spacing: 12) {
             HStack(spacing: 12) {
                 AgentIcon(id: summary.id)
                 Text(summary.name)
                     .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .opacity(isActive ? 1 : palette.idleRow)
-            Group {
-                if summary.working > 0 {
-                    status(summary.sessions == 1 ? "1 session" : "\(summary.sessions) sessions", dot: Palette.green)
-                } else if summary.waiting > 0 {
-                    status("Needs you", dot: Palette.orange)
-                } else {
-                    Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
-                }
+            HStack(spacing: 8) {
+                Text(parts.joined(separator: " · "))
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(isActive ? palette.secondaryText : palette.tertiaryText)
+                    .lineLimit(1)
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
             }
+            .fixedSize()
             .id(statusKey)
             .transition(.blurFade)
         }
-        .animation(Motion.fade, value: statusKey)
-        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Agents with no session share one line, so a long list of installed agents doesn't take a row each.
+private struct NotRunningRow: View, Themed {
+    let agents: [AgentSummary]
+    @Environment(\.colorSchemeContrast) var contrast
+
+    private var names: String { agents.map(\.name).joined(separator: ", ") }
+
+    var body: some View {
+        // Shows as many icons as fit, then a count of the rest.
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: agents.count, through: 0, by: -1)), id: \.self) { shown in
+                row(shown: shown)
+            }
+        }
+        .help(names)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(agents.count) not running: \(names)")
     }
 
-    private var isActive: Bool { summary.working + summary.waiting > 0 }
-
-    /// Changes with the kind of status, not its count, so "1 session" becoming "2 sessions" stays in place.
-    private var statusKey: String { summary.working > 0 ? "working" : summary.waiting > 0 ? "waiting" : "idle" }
-
-    private func status(_ text: String, dot: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(text).font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.secondaryText)
-            Circle().fill(dot).frame(width: 7, height: 7)
+    private func row(shown: Int) -> some View {
+        HStack(spacing: 6) {
+            ForEach(agents.prefix(shown)) { AgentIcon(id: $0.id, size: 18) }
+            if shown < agents.count {
+                Text("+\(agents.count - shown)")
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(palette.tertiaryText)
+            }
+            Spacer(minLength: 8)
+            Text("\(agents.count) not running")
+                .font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(palette.tertiaryText)
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 }
@@ -802,7 +910,7 @@ private struct PoolRows: View, Themed {
     /// As wide as the card's longest window name, so its bars line up and short names leave them room.
     private var labelWidth: CGFloat {
         let widths = pool.windows.map { ($0.label as NSString).size(withAttributes: [.font: PoolBar.labelFont]).width }
-        return min(140, (widths.max() ?? 0).rounded(.up))
+        return min(180, (widths.max() ?? 0).rounded(.up))
     }
 
     private var name: some View {
@@ -1131,28 +1239,42 @@ private struct PillSwitchBody: View, Themed {
 }
 
 /// The menu is designed dark only, so force the popover window's appearance. Also reports each time
-/// the window comes on or off screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra.
+/// the window comes on or off screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra, and
+/// which screen it's on, which limits how tall the menu may grow.
 private struct MenuWindow: NSViewRepresentable {
     let onVisibility: (Bool) -> Void
+    let onScreen: (_ visibleFrame: CGRect) -> Void
 
     func makeNSView(context: Context) -> WatchingView {
         let view = WatchingView()
         view.onVisibility = onVisibility
+        view.onScreen = onScreen
         return view
     }
 
     func updateNSView(_ nsView: WatchingView, context: Context) {
         nsView.onVisibility = onVisibility
+        nsView.onScreen = onScreen
     }
 
     final class WatchingView: NSView {
         var onVisibility: (Bool) -> Void = { _ in }
+        var onScreen: (CGRect) -> Void = { _ in }
         private var observer: NSObjectProtocol?
+        private var screenObserver: NSObjectProtocol?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
             guard let window else { return }
+            // Reported before the window is visible too, or the first open could already run off the screen.
+            DispatchQueue.main.async { [weak self] in self?.reportScreen() }
+            screenObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reportScreen() }
+            }
             window.appearance = NSAppearance(named: .darkAqua)
             observer = NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
@@ -1160,9 +1282,14 @@ private struct MenuWindow: NSViewRepresentable {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.onVisibility(self.window?.occlusionState.contains(.visible) == true)
+                    self.reportScreen()
                 }
             }
             if window.occlusionState.contains(.visible) { onVisibility(true) }
+        }
+
+        private func reportScreen() {
+            if let screen = window?.screen ?? NSScreen.main { onScreen(screen.visibleFrame) }
         }
     }
 }

@@ -44,3 +44,30 @@ import Testing
     #expect(HookAction(explicitState: "done") == nil)
     #expect(HookAction(explicitState: "Working") == nil)
 }
+
+@Test func sectionStatusCountsSessionsNotAgents() {
+    #expect(SessionTally([]).sectionStatus == "No sessions")
+    #expect(SessionTally([.idle]).sectionStatus == "1 session open")
+    #expect(SessionTally([.idle, .waiting, .idle]).sectionStatus == "3 sessions open")
+    #expect(SessionTally([.working]).sectionStatus == "1 of 1 session working")
+    #expect(SessionTally([.working, .idle, .idle, .waiting]).sectionStatus == "1 of 4 sessions working")
+    #expect(SessionTally([.working, .working]).sectionStatus == "2 of 2 sessions working")
+}
+
+@Test func rowStatusListsOnlyTheStatesThatHaveSessions() {
+    #expect(SessionTally([]).rowStatus == [])
+    #expect(SessionTally([.idle, .idle]).rowStatus == ["2 idle"])
+    #expect(SessionTally([.idle, .working, .waiting, .working]).rowStatus == ["2 working", "1 needs you", "1 idle"])
+    #expect(SessionTally([.waiting]).rowStatus == ["1 needs you"])
+}
+
+@Test func aRowOfIdleSessionsNeverCountsThemAsWorking() {
+    let tally = SessionTally([.idle, .idle, .idle])
+    #expect(tally.working == 0)
+    #expect(tally.total == 3)
+    #expect(tally.rowStatus == ["3 idle"])
+}
+
+@Test func sessionTallySaysNeedYouForMoreThanOne() {
+    #expect(SessionTally([.waiting, .waiting]).rowStatus == ["2 need you"])
+}
