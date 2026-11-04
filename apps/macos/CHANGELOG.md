@@ -1,5 +1,12 @@
 # @afterhours/macos
 
+## 0.4.1
+
+### Patch Changes
+
+- 15eecb9: Limits now names your plans the way their providers do, so a Claude Max 20x login shows as Ultra. It also reports more of what each provider sends: Antigravity's 5-hour, weekly, and other quota windows (read from both of Google's endpoints), Claude's monthly spend, Cursor's pools as Cursor Models and Other Models, and Grok and Codex plans that have a monthly allowance.
+- 15eecb9: The menu no longer grows off the bottom of your screen: the header and the Pause and Settings rows stay in place while Battery, Agents, and Limits scroll between them. Agents now count sessions everywhere, so a row reads "2 working · 1 idle" instead of showing idle sessions as "3 sessions" beside a green dot, and agents with no session share one row of icons. The menu is a little wider, too.
+
 ## 0.4.0
 
 ### Minor Changes
