@@ -205,11 +205,11 @@ struct MenuView: View, Themed {
         .onChange(of: model.lastError, initial: true) { _, error in
             if let error { shownError = error }
         }
-        .animation(reduceMotion ? Motion.fade : Motion.settle, value: model.lastError != nil)
-        .animation(reduceMotion ? Motion.fade : Motion.settle, value: showsLidWarning)
+        .animation(reduceMotion ? nil : Motion.settle, value: model.lastError != nil)
+        .animation(reduceMotion ? nil : Motion.settle, value: showsLidWarning)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
-        .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
-        .animation(reduceMotion ? Motion.fade : Motion.settle, value: openPools)
+        .animation(reduceMotion ? nil : Motion.settle, value: prefs.limitsExpanded)
+        .animation(reduceMotion ? nil : Motion.settle, value: openPools)
     }
 
     private var isPaused: Bool {
@@ -537,6 +537,7 @@ private struct Collapsible<Content: View>: View {
             }
             .clipped()
             .opacity(expanded ? 1 : 0)
+            .animation(reduceMotion ? Motion.fade : Motion.settle, value: expanded)
             .allowsHitTesting(expanded)
             .accessibilityHidden(!expanded)
     }
