@@ -370,11 +370,13 @@ private struct MascotBadge: View, Themed {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(state.isHolding ? Palette.blue : palette.fill)
-            Image(nsImage: Mug.image(mood, size: 26))
-                .renderingMode(.template)
-                .foregroundStyle(.white.opacity(state.isHolding ? 1 : 0.7))
-                .id(mood)
-                .transition(.blurFade)
+            // Every mood stays in the tree so the swap only cross-fades and the tile is never empty.
+            ForEach(Mug.Mood.allCases, id: \.self) { candidate in
+                Image(nsImage: Mug.image(candidate, size: 26))
+                    .renderingMode(.template)
+                    .foregroundStyle(.white.opacity(state.isHolding ? 1 : 0.7))
+                    .opacity(candidate == mood ? 1 : 0)
+            }
         }
         .frame(width: 32, height: 32)
         .animation(Motion.fade, value: mood)

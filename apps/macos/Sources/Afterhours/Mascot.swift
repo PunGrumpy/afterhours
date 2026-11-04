@@ -4,7 +4,7 @@ import AppKit
 /// Steam carries the state so it reads at 16 pt: two wisps while awake, one while paused, none when
 /// the Mac can sleep.
 enum Mug {
-    enum Mood {
+    enum Mood: CaseIterable {
         case awake, asleep, drowsy, alarmed
         case off
 
