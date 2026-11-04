@@ -340,7 +340,13 @@ private struct BatterySection: View, Themed {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionTitle("Battery")
+            HStack(alignment: .firstTextBaseline) {
+                SectionTitle("Battery")
+                Spacer()
+                if let percent = battery.percent {
+                    Text("\(percent)%").font(.system(size: 15, weight: .semibold).monospacedDigit())
+                }
+            }
             if let percent = battery.percent {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -349,22 +355,11 @@ private struct BatterySection: View, Themed {
                     }
                 }
                 .frame(height: 7)
-                .padding(.top, 10)
-                HStack {
-                    Text(battery.charging ? "\(percent)%, charging" : battery.onAC ? "\(percent)%, plugged in" : "\(percent)% left")
-                        .fontWeight(.medium)
-                    Spacer()
-                    Text(cutoff).foregroundStyle(palette.tertiaryText)
-                }
-                .font(.system(size: 12).monospacedDigit())
                 .padding(.top, 8)
-                if let timeLeft {
-                    Text(timeLeftText(timeLeft))
-                        .font(.system(size: 12).monospacedDigit())
-                        .foregroundStyle(palette.secondaryText)
-                        .padding(.top, 4)
-                        .transition(.opacity)
-                }
+                Text(caption)
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(palette.secondaryText)
+                    .padding(.top, 8)
             } else {
                 Text("On AC power")
                     .font(.system(size: 12))
@@ -374,8 +369,20 @@ private struct BatterySection: View, Themed {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
-        .animation(Motion.fade, value: timeLeft == nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenLabel)
+    }
+
+    /// The time left already names the cutoff when one applies, so only the state needs it added.
+    private var caption: String {
+        if let timeLeft { return timeLeftText(timeLeft) }
+        let state = battery.charging ? "Charging" : battery.onAC ? "Plugged in" : "On battery"
+        return "\(state) · \(cutoff)"
+    }
+
+    private var spokenLabel: String {
+        guard let percent = battery.percent else { return "Battery, on AC power" }
+        return "Battery, \(percent)%\(battery.charging || battery.onAC ? "" : " left"), \(caption)"
     }
 
     /// Says when the hold ends, so you can tell before closing the lid whether tonight's work fits.
