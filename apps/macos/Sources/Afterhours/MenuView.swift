@@ -414,10 +414,13 @@ private struct AgentRow: View, Themed {
 
     var body: some View {
         HStack(spacing: 12) {
-            AgentIcon(id: summary.id)
-            Text(summary.name)
-                .font(.system(size: 13, weight: .medium))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                AgentIcon(id: summary.id)
+                Text(summary.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .opacity(isActive ? 1 : palette.idleRow)
             if summary.working > 0 {
                 status(summary.sessions == 1 ? "1 session" : "\(summary.sessions) sessions", dot: Palette.green)
             } else if summary.waiting > 0 {
@@ -426,7 +429,6 @@ private struct AgentRow: View, Themed {
                 Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
             }
         }
-        .opacity(isActive ? 1 : palette.idleRow)
         .animation(Motion.fade, value: isActive)
         .accessibilityElement(children: .combine)
     }
