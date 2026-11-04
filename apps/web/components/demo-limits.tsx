@@ -35,7 +35,7 @@ const pools: Pool[] = [
     accounts: 2,
     id: "claude",
     name: "Claude Code",
-    plan: "Max",
+    plan: "Ultra",
     where: "2 accounts",
     windows: [
       {
@@ -90,15 +90,15 @@ const pools: Pool[] = [
     where: "Google account",
     windows: [
       {
-        id: "pro",
-        label: "Pro",
+        id: "gemini-5h",
+        label: "Gemini · 5-hour",
         outlook: { projectedLeft: 61 },
         resetsIn: 262,
         segments: [{ left: 91, verdict: "fine" }],
       },
       {
-        id: "flash",
-        label: "Flash",
+        id: "3p-weekly",
+        label: "Claude & GPT (shared) · Weekly",
         outlook: { projectedLeft: 83 },
         resetsIn: 262,
         segments: [{ left: 97, verdict: "fine" }],
@@ -314,7 +314,9 @@ const Bar = ({ usage, elapsed }: { usage: UsageWindow; elapsed: number }) => {
 
   return (
     <div className="col-span-3 grid grid-cols-subgrid items-center gap-y-1">
-      <span className="text-[12px] font-medium">{usage.label}</span>
+      <span className="max-w-[180px] truncate text-[12px] font-medium">
+        {usage.label}
+      </span>
       <div
         aria-hidden="true"
         className={cn("flex h-[5px]", {
