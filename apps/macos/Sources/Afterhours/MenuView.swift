@@ -753,34 +753,59 @@ private struct PoolBar: View, Themed {
     let labelWidth: CGFloat
 
     static let labelFont = NSFont.systemFont(ofSize: 12, weight: .medium)
+    private static let resetFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    /// Wide enough for the longest reset, so every bar in a card ends at the same place.
+    private static let resetWidth = ("23h 59m" as NSString).size(withAttributes: [.font: resetFont]).width.rounded(.up)
 
-    /// One line: name, bar, what's left. Only a window heading for trouble adds its outlook and reset
-    /// below; a calm one keeps them for the tooltip.
+    /// The bar never gets narrower than this; a longer name moves above its bar instead.
+    private static let minBarWidth: CGFloat = 50
+
+    /// One line of fixed columns: name, bar, what's left, time to reset. Only a window heading for
+    /// trouble adds its outlook below; the tooltip and VoiceOver always get the whole sentence.
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let now = context.date
             let verdict = UsageColor.verdict(window, now: now)
+            let outlook = outlook(window.pace(now: now), now: now)
             let detail = detail(now: now)
+            let name = Text(window.label).font(Font(Self.labelFont)).lineLimit(1)
+            let bar = HStack(spacing: window.segments.count > 1 ? 3 : 0) {
+                ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
+                    Segment(window: segment, now: now)
+                }
+            }
+            .frame(minWidth: Self.minBarWidth, idealWidth: Self.minBarWidth, maxWidth: .infinity)
+            .frame(height: 5)
+            let left = Text("\(window.leftPercent)%")
+                .font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(verdict == .fine ? .white : verdict.color)
+                .frame(minWidth: 34, alignment: .trailing)
+            let reset = Text(window.resetsAt.map { compact(until: $0, now: now) } ?? "")
+                .font(Font(Self.resetFont))
+                .foregroundStyle(palette.tertiaryText)
+                .lineLimit(1)
+                .frame(width: Self.resetWidth, alignment: .trailing)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(window.label)
-                        .font(Font(Self.labelFont))
-                        .lineLimit(1)
-                        .frame(width: labelWidth, alignment: .leading)
-                    HStack(spacing: window.segments.count > 1 ? 3 : 0) {
-                        ForEach(Array(window.segments.enumerated()), id: \.offset) { _, segment in
-                            Segment(window: segment, now: now)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        name.frame(width: labelWidth, alignment: .leading)
+                        bar
+                        left
+                        reset
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        name
+                        HStack(spacing: 8) {
+                            bar
+                            left
+                            reset
                         }
                     }
-                    .frame(height: 5)
-                    Text("\(window.leftPercent)%")
-                        .font(.system(size: 12).monospacedDigit())
-                        .frame(minWidth: 34, alignment: .trailing)
                 }
-                if verdict != .fine, !detail.isEmpty {
-                    Text(detail)
+                if verdict != .fine, let outlook {
+                    Text(outlook)
                         .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(verdict.color)
+                        .foregroundStyle(palette.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -848,11 +873,17 @@ private struct PoolBar: View, Themed {
     }
 
     private func countdown(to date: Date, now: Date) -> String {
+        let text = compact(until: date, now: now)
+        return text == "now" ? text : "in \(text)"
+    }
+
+    /// "40m", "1h 17m" or "3d 14h": the same time as the sentence, short enough for a column.
+    private func compact(until date: Date, now: Date) -> String {
         let minutes = Int(date.timeIntervalSince(now) / 60)
         if minutes <= 0 { return "now" }
-        if minutes < 60 { return "in \(minutes)m" }
-        if minutes < 24 * 60 { return "in \(minutes / 60)h \(minutes % 60)m" }
-        return "in \(minutes / (24 * 60))d \(minutes % (24 * 60) / 60)h"
+        if minutes < 60 { return "\(minutes)m" }
+        if minutes < 24 * 60 { return "\(minutes / 60)h \(minutes % 60)m" }
+        return "\(minutes / (24 * 60))d \(minutes % (24 * 60) / 60)h"
     }
 }
 
