@@ -6,12 +6,14 @@ struct AfterhoursApp: App {
     @State private var model: AppModel
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
-    /// `Afterhours --snapshot out.png [expanded] [crowded]` renders the menu with sample data and exits, so the
-    /// design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven show.
+    /// `Afterhours --snapshot out.png [expanded] [crowded] [tall]` renders the menu with sample data and exits, so the
+    /// design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven show;
+    /// `tall` adds every agent and caps the menu's height at 620 points, so its middle scrolls.
     init() {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--snapshot"), arguments.count > index + 1 {
-            Self.snapshotMenu(to: arguments[index + 1], expanded: arguments.contains("expanded"), crowded: arguments.contains("crowded"))
+            Self.snapshotMenu(to: arguments[index + 1], expanded: arguments.contains("expanded"),
+                              crowded: arguments.contains("crowded"), tall: arguments.contains("tall"))
         }
         if let index = arguments.firstIndex(of: "--snapshot-settings"), arguments.count > index + 1 {
             Self.snapshotSettings(to: arguments[index + 1], page: arguments.dropFirst(index + 2).first ?? "general")
@@ -20,20 +22,41 @@ struct AfterhoursApp: App {
         _model = State(initialValue: AppModel())
     }
 
-    private static func previewModel(expanded: Bool, crowded: Bool) -> AppModel {
+    private static func previewModel(expanded: Bool, crowded: Bool, tall: Bool = false) -> AppModel {
         let prefs = Preferences(defaults: UserDefaults(suiteName: "app.afterhours.snapshot")!)
         prefs.limitsExpanded = expanded
         prefs.hubs = [UsageHub(id: "sample", label: "Thaipass", url: "https://thaipass-proxy.vercel.app")]
-        return AppModel(preview: prefs, crowded: crowded)
+        return AppModel(preview: prefs, crowded: crowded, tall: tall)
     }
 
-    private static func snapshotMenu(to path: String, expanded: Bool, crowded: Bool) -> Never {
-        let model = previewModel(expanded: expanded, crowded: crowded)
+    /// The plain menu goes through ImageRenderer, which can't draw a scroll view, so `tall` renders in a real window.
+    private static func snapshotMenu(to path: String, expanded: Bool, crowded: Bool, tall: Bool) -> Never {
+        let model = previewModel(expanded: expanded, crowded: crowded, tall: tall)
+        if tall {
+            let menu = MenuView(model: model, prefs: model.prefs, snapshot: true, previewMaxHeight: 620)
+            captureWindow(of: AnyView(menu), to: path, title: "Afterhours")
+        }
         let renderer = ImageRenderer(content: MenuView(model: model, prefs: model.prefs, snapshot: true))
         renderer.scale = 2
         if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
             try? png.write(to: URL(fileURLWithPath: path))
+        }
+        exit(0)
+    }
+
+    /// Controls backed by AppKit only draw inside a real window, so this shows one offscreen and captures its content.
+    private static func captureWindow(of root: AnyView, to path: String, title: String) -> Never {
+        // The capture below sees only what the content view draws, so paint the window's own color.
+        let host = NSHostingController(rootView: root.background(Color(nsColor: .windowBackgroundColor)))
+        let window = NSWindow(contentViewController: host)
+        window.title = title
+        window.toolbarStyle = .preference
+        window.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        if let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         }
         exit(0)
     }
@@ -47,18 +70,7 @@ struct AfterhoursApp: App {
         } else {
             AnyView(SettingsView(model: model, prefs: model.prefs, tab: SettingsView.Tab(rawValue: page) ?? .general))
         }
-        // The capture below sees only what the content view draws, so paint the window's own color.
-        let host = NSHostingController(rootView: root.background(Color(nsColor: .windowBackgroundColor)))
-        let window = NSWindow(contentViewController: host)
-        window.title = "Afterhours Settings"
-        window.toolbarStyle = .preference
-        window.orderFrontRegardless()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
-        if let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-            view.cacheDisplay(in: view.bounds, to: rep)
-            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
-        }
-        exit(0)
+        captureWindow(of: root, to: path, title: "Afterhours Settings")
     }
 
     var body: some Scene {
