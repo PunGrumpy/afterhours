@@ -43,7 +43,7 @@ private enum Motion {
     /// Critically damped: nothing here carries momentum, so nothing overshoots. Reversible mid-flight.
     /// Under 300 ms because Limits opens and closes many times a day.
     static let settle = Animation.spring(duration: 0.25, bounce: 0)
-    /// Changes this soon after the menu opens are the refresh that opening triggers, not something you watched happen.
+    /// Opening the menu re-reads state right away, and that catch-up isn't something you watched happen.
     static let openGrace: TimeInterval = 0.15
 }
 
@@ -217,6 +217,11 @@ struct MenuView: View, Themed {
         return false
     }
 
+    /// Swaps the whole headline with the kind of result, so a ticking time stays in place.
+    private var headlineKey: String {
+        model.state.isHolding && model.holdReason != .working ? "waiting" : model.state.key
+    }
+
     private var showsLidWarning: Bool { prefs.lidClosedMode && !model.lidProof }
 
     private var divider: some View {
@@ -244,11 +249,11 @@ struct MenuView: View, Themed {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .id(model.state.key)
+                .id(headlineKey)
                 .transition(.blurFade)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(Motion.fade, value: model.state.key)
+            .animation(Motion.fade, value: headlineKey)
             Toggle("Keep your Mac awake while agents work", isOn: $prefs.enabled)
                 .toggleStyle(PillSwitch())
                 .labelsHidden()
