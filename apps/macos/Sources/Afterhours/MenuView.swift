@@ -45,6 +45,39 @@ private enum Motion {
     static let settle = Animation.spring(duration: 0.25, bounce: 0)
 }
 
+/// The header's result and what it means, one entry per state.
+private struct MenuHeadline: Equatable {
+    let title: String
+    let detail: String
+
+    init(state: HoldState, reason: HoldReason, since: Date?, lidProof: Bool, now: Date) {
+        switch (state, reason) {
+        case (.holding, .working):
+            let seconds = Int(now.timeIntervalSince(since ?? now))
+            title = "Awake for \(seconds / 3600)h \(String(format: "%02d", seconds / 60 % 60))m"
+            detail = lidProof ? "Lid can close" : "Keep the lid open"
+        case (.holding, .waitingForYou(let until?)):
+            title = "Waiting for you"
+            detail = "Until \(until.formatted(date: .omitted, time: .shortened))"
+        case (.holding, .waitingForYou(nil)):
+            title = "Waiting for you"
+            detail = "While sessions are open"
+        case (.idle, _):
+            title = "Idle"
+            detail = "Your Mac can sleep"
+        case (.disabled, _):
+            title = "Off"
+            detail = "Your Mac sleeps normally"
+        case (.paused(let until), _):
+            title = "Paused"
+            detail = "Until \(until.formatted(date: .omitted, time: .shortened))"
+        case (.blocked(let why), _):
+            title = "Released"
+            detail = why
+        }
+    }
+}
+
 struct MenuView: View, Themed {
     let model: AppModel
     @Bindable var prefs: Preferences
@@ -136,18 +169,23 @@ struct MenuView: View, Themed {
     private var header: some View {
         HStack(spacing: 10) {
             MascotBadge(state: model.state)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Afterhours")
-                    .font(.system(size: 15, weight: .bold))
-                TimelineView(.periodic(from: .now, by: 15)) { context in
-                    Text(statusLine(now: context.date))
-                        .font(.system(size: 12).monospacedDigit())
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                let headline = MenuHeadline(
+                    state: model.state, reason: model.holdReason, since: model.holdingSince,
+                    lidProof: model.lidProof, now: context.date
+                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline.title)
+                        .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    Text(headline.detail)
+                        .font(.system(size: 12))
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-                        .id(model.state.key)
-                        .transition(.blurFade)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .id(model.state.key)
+                .transition(.blurFade)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(Motion.fade, value: model.state.key)
@@ -158,24 +196,6 @@ struct MenuView: View, Themed {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 10)
-    }
-
-    private func statusLine(now: Date) -> String {
-        switch model.state {
-        case .holding where model.holdReason != .working:
-            if case .waitingForYou(let until?) = model.holdReason {
-                return "Waiting for you until \(until.formatted(date: .omitted, time: .shortened))"
-            }
-            return "Waiting for you while sessions are open"
-        case .holding:
-            let seconds = Int(now.timeIntervalSince(model.holdingSince ?? now))
-            let elapsed = "\(seconds / 3600)h \(String(format: "%02d", seconds / 60 % 60))m"
-            return model.lidProof ? "Awake for \(elapsed) · lid can close" : "Awake for \(elapsed) · keep lid open"
-        case .idle: return "Idle. Your Mac can sleep"
-        case .disabled: return "Off. Your Mac sleeps normally"
-        case .paused(let until): return "Paused until \(until.formatted(date: .omitted, time: .shortened))"
-        case .blocked(let reason): return "Released. \(reason)"
-        }
     }
 
     // MARK: Agents
@@ -298,12 +318,17 @@ private struct MascotBadge: View, Themed {
     }
 }
 
-private struct SectionTitle: View {
+private struct SectionTitle: View, Themed {
+    /// The chevrons beside a title use the same font, so they sit on its baseline.
+    static let font = Font.system(size: 12, weight: .semibold)
+
     let text: String
+    @Environment(\.colorSchemeContrast) var contrast
+
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text).font(.system(size: 15, weight: .bold))
+        Text(text).font(Self.font).foregroundStyle(palette.secondaryText)
     }
 }
 
@@ -457,7 +482,7 @@ private struct DisclosureRow<Trailing: View>: View, Themed {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 SectionTitle(title).fixedSize()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(SectionTitle.font)
                     .imageScale(.small)
                     .foregroundStyle(hovering ? palette.secondaryText : palette.tertiaryText)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
