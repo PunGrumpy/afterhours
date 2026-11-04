@@ -18,7 +18,7 @@
     },
     "apps/macos": {
       "name": "@afterhours/macos",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "devDependencies": {
         "@afterhours/core": "workspace:*",
       },
