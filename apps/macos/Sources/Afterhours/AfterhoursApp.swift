@@ -16,6 +16,9 @@ struct AfterhoursApp: App {
         if let index = arguments.firstIndex(of: "--snapshot-settings"), arguments.count > index + 1 {
             Self.snapshotSettings(to: arguments[index + 1], page: arguments.dropFirst(index + 2).first ?? "general")
         }
+        if let index = arguments.firstIndex(of: "--snapshot-motion"), arguments.count > index + 1 {
+            Self.snapshotMotion(to: arguments[index + 1], flip: arguments.dropFirst(index + 2).first ?? "limits")
+        }
         // Built only for a real run, because its init changes power settings and replaces the installed hook.
         _model = State(initialValue: AppModel())
     }
@@ -59,6 +62,71 @@ struct AfterhoursApp: App {
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         }
         exit(0)
+    }
+
+    private static let motionFrames = 8
+    private static let motionSpan: TimeInterval = 0.32
+
+    /// Flips one state (`limits`, `pool` or `pause`) in a hosted menu and writes frames of the change, each stamped with when it was captured.
+    private static func snapshotMotion(to path: String, flip: String) -> Never {
+        let model = previewModel(expanded: flip == "pool", crowded: false)
+        let size = NSSize(width: 348, height: 780)
+        let host = NSHostingView(rootView: MenuView(model: model, prefs: model.prefs, snapshot: true)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(Color(red: 0.16, green: 0.18, blue: 0.24)))
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+
+        let start = Date()
+        switch flip {
+        case "pause": model.preview(state: .paused(until: start.addingTimeInterval(30 * 60)))
+        case "pool": click(window, at: NSPoint(x: 150, y: size.height - 507))
+        default: model.prefs.limitsExpanded = true
+        }
+        var frames: [(milliseconds: Int, image: NSImage)] = []
+        let bounds = host.bounds
+        for index in 0..<motionFrames {
+            RunLoop.main.run(until: start.addingTimeInterval(motionSpan * Double(index) / Double(motionFrames - 1)))
+            let captured = Date()
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(bounds.width), pixelsHigh: Int(bounds.height),
+                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { continue }
+            host.cacheDisplay(in: bounds, to: rep)
+            let image = NSImage(size: size)
+            image.addRepresentation(rep)
+            frames.append((Int((captured.timeIntervalSince(start) * 1000).rounded()), image))
+        }
+        let strip = HStack(alignment: .top, spacing: 0) {
+            ForEach(frames, id: \.milliseconds) { frame in
+                VStack(spacing: 4) {
+                    Image(nsImage: frame.image)
+                    Text("\(frame.milliseconds) ms").font(.system(size: 14).monospacedDigit())
+                }
+            }
+        }
+        .padding(.bottom, 8)
+        .background(Color(red: 0.16, green: 0.18, blue: 0.24))
+        .foregroundStyle(.white)
+        let renderer = ImageRenderer(content: strip)
+        renderer.scale = 2
+        if let tiff = renderer.nsImage?.tiffRepresentation,
+           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: path))
+        }
+        exit(0)
+    }
+
+    /// SwiftUI buttons aren't AppKit views and the accessibility tree stays empty without an assistive app,
+    /// so the press is a mouse click at a point measured from the sample menu's layout.
+    private static func click(_ window: NSWindow, at point: NSPoint) {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+            else { continue }
+            window.sendEvent(event)
+        }
     }
 
     var body: some Scene {
