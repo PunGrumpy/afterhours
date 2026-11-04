@@ -1,5 +1,20 @@
 # @afterhours/macos
 
+## 0.4.0
+
+### Minor Changes
+
+- 06ea0bc: The menu now leads with the result: the header says "Awake for 1h 23m" or "Paused" in bold with what it means beneath, section titles step back so the numbers stand out, and Battery is one title row, one bar and one line. Each Limits window is one line of name, bar, percent and time to reset, with a short outlook line only when it's heading for trouble. The idle label no longer fades out, and figures, Pause and Resume, agent status and the warning rows now animate when something changes while the menu is open, never when you open it. Opening a provider inside Limits no longer makes the section jump.
+
+## 0.3.5
+
+### Patch Changes
+
+- d22f42b: When lid-closed mode stops working, the Power tab in Settings now says so and offers Reinstall…, and errors from Install… and Uninstall… appear there too instead of only in the menu. The admin password dialog says what it is for, and Settings errors are readable in the light appearance.
+- 6bf3ccf: When Limits is collapsed and you have more providers than fit on one line, the row now shows the providers that need attention first and a "+N" for the rest, instead of wrapping the title or clipping the badges.
+- 3ad6e87: The menu bar mug now looks different when Afterhours is off than when it is idle, so a glance tells you whether it will keep your Mac awake. The Pause buttons are unavailable while Afterhours is off, and turning it back on no longer lands in a stale pause. VoiceOver now hears the icon's state, which 0.3.4 promised but didn't deliver.
+- 4fd4c39: Afterhours no longer chimes and posts a banner when you flip its switch, pause it or resume it from the menu, and each kind of notice replaces the last one in Notification Center instead of piling up. ⌥⌘L still tells you what it did. When macOS has notifications turned off for Afterhours, Settings says so and offers to open the system setting.
+
 ## 0.3.4
 
 ### Patch Changes

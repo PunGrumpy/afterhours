@@ -148,6 +148,9 @@ final class AppModel {
         return result
     }
 
+    /// Moves a preview model to another state, so a snapshot can flip it and film the change.
+    func preview(state next: HoldState) { state = next }
+
     private static func sampleUsage(crowded: Bool) -> UsageSnapshot {
         let now = Date()
         func window(_ id: String, _ kind: UsageWindow.Kind, _ label: String, _ used: Double, hours: Double) -> UsageWindow {
