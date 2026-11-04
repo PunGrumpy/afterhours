@@ -450,21 +450,43 @@ private struct Collapsible<Content: View>: View {
     let expanded: Bool
     let reduceMotion: Bool
     @ViewBuilder let content: Content
-    @State private var height: CGFloat = 0
 
     var body: some View {
         content
-            .fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .transaction { transaction in
                 if reduceMotion { transaction.animation = nil }
-            } body: {
-                $0.frame(height: expanded ? height : 0, alignment: reduceMotion ? .top : .bottom)
+            } body: { view in
+                Reveal(progress: expanded ? 1 : 0, hangsFromBottom: !reduceMotion) { view }
             }
             .clipped()
             .opacity(expanded ? 1 : 0)
             .accessibilityHidden(!expanded)
+    }
+}
+
+/// Lays its content out at full height and reports only `progress` of it. The height is interpolated by the
+/// layout itself, not copied from a measurement, so a section that grows inside another one moves it in step.
+private struct Reveal: Layout {
+    var progress: CGFloat
+    let hangsFromBottom: Bool
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let size = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? size.width, height: size.height * progress)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let content = subviews.first else { return }
+        let size = content.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        let top = hangsFromBottom ? bounds.maxY - size.height : bounds.minY
+        content.place(at: CGPoint(x: bounds.minX, y: top), anchor: .topLeading,
+                      proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
 }
 
