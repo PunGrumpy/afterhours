@@ -876,7 +876,6 @@ private struct PoolBar: View, Themed {
             .frame(height: 5)
             let left = Text("\(window.leftPercent)%")
                 .font(.system(size: 12).monospacedDigit())
-                .foregroundStyle(verdict == .fine ? .white : verdict.color)
                 .ticking(window.leftPercent)
                 .frame(minWidth: 34, alignment: .trailing)
             let reset = Text(window.resetsAt.map { compact(until: $0, now: now) } ?? "")
@@ -904,7 +903,7 @@ private struct PoolBar: View, Themed {
                 if verdict != .fine, let outlook {
                     Text(outlook)
                         .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(palette.secondaryText)
+                        .foregroundStyle(verdict.color)
                         .lineLimit(1)
                 }
             }
