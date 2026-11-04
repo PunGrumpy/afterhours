@@ -43,6 +43,48 @@ private enum Motion {
     /// Critically damped: nothing here carries momentum, so nothing overshoots. Reversible mid-flight.
     /// Under 300 ms because Limits opens and closes many times a day.
     static let settle = Animation.spring(duration: 0.25, bounce: 0)
+    /// Changes this soon after the menu opens are the refresh that opening triggers, not something you watched happen.
+    static let openGrace: TimeInterval = 0.15
+}
+
+private struct ShownAtKey: EnvironmentKey {
+    static let defaultValue: Date? = .distantPast
+}
+
+private extension EnvironmentValues {
+    /// When the menu last came on screen; nil while it is hidden.
+    var menuShownAt: Date? {
+        get { self[ShownAtKey.self] }
+        set { self[ShownAtKey.self] = newValue }
+    }
+}
+
+/// Animates a change to `value` only if you watch it happen: never on first render, when the menu
+/// opens, or when a section expands, because `animation(_:value:)` fires only on the change itself.
+private struct Settling<Value: Equatable>: ViewModifier {
+    let value: Value
+    @Environment(\.menuShownAt) private var shownAt
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let watching = shownAt.map { Date().timeIntervalSince($0) > Motion.openGrace } ?? false
+        content.animation(watching ? (reduceMotion ? Motion.fade : Motion.settle) : nil, value: value)
+    }
+}
+
+private extension View {
+    func settling(_ value: some Equatable) -> some View { modifier(Settling(value: value)) }
+
+    /// A figure that rolls to its new digits; under Reduce Motion it cross-fades instead.
+    func ticking(_ value: some Equatable) -> some View { modifier(TickingFigure()).settling(value) }
+}
+
+private struct TickingFigure: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.contentTransition(reduceMotion ? .opacity : .numericText())
+    }
 }
 
 /// The header's result and what it means, one entry per state.
@@ -90,20 +132,22 @@ struct MenuView: View, Themed {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Providers the user opened or closed by hand; the rest open only when they need attention.
     @State private var openPools: [String: Bool] = [:]
+    @State private var shownAt: Date?
+    /// The last error text, kept while the error row folds away so its words don't vanish first.
+    @State private var shownError = ""
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            if let error = model.lastError {
-                Text(error)
+            Collapsible(expanded: model.lastError != nil, reduceMotion: reduceMotion) {
+                Text(model.lastError ?? shownError)
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
-                    .transition(.opacity)
             }
-            if prefs.lidClosedMode && !model.lidProof {
+            Collapsible(expanded: showsLidWarning, reduceMotion: reduceMotion) {
                 HStack(spacing: 8) {
                     Text("On battery, closing the lid sleeps your Mac")
                         .font(.system(size: 12))
@@ -143,7 +187,10 @@ struct MenuView: View, Themed {
         .background(Palette.background(reduceTransparency: reduceTransparency || snapshot))
         .background {
             if !snapshot {
-                MenuWindow { model.menuOpened() }
+                MenuWindow { visible in
+                    shownAt = visible ? Date() : nil
+                    if visible { model.menuOpened() }
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: snapshot ? 10 : 0, style: .continuous))
@@ -154,11 +201,23 @@ struct MenuView: View, Themed {
         }
         .padding(snapshot ? 24 : 0)
         .background(snapshot ? Color(red: 0.16, green: 0.18, blue: 0.24) : .clear)
-        .animation(Motion.fade, value: model.lastError)
+        .environment(\.menuShownAt, snapshot ? .distantPast : shownAt)
+        .onChange(of: model.lastError, initial: true) { _, error in
+            if let error { shownError = error }
+        }
+        .animation(reduceMotion ? Motion.fade : Motion.settle, value: model.lastError != nil)
+        .animation(reduceMotion ? Motion.fade : Motion.settle, value: showsLidWarning)
         .animation(Motion.fade, value: model.usage.accounts.isEmpty)
         .animation(reduceMotion ? Motion.fade : Motion.settle, value: prefs.limitsExpanded)
         .animation(reduceMotion ? Motion.fade : Motion.settle, value: openPools)
     }
+
+    private var isPaused: Bool {
+        if case .paused = model.state { return true }
+        return false
+    }
+
+    private var showsLidWarning: Bool { prefs.lidClosedMode && !model.lidProof }
 
     private var divider: some View {
         Rectangle().fill(palette.hairline).frame(height: 1).padding(.horizontal, 16)
@@ -177,6 +236,7 @@ struct MenuView: View, Themed {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline.title)
                         .font(.system(size: 15, weight: .bold).monospacedDigit())
+                        .ticking(headline.title)
                     Text(headline.detail)
                         .font(.system(size: 12))
                         .foregroundStyle(palette.secondaryText)
@@ -276,18 +336,23 @@ struct MenuView: View, Themed {
         HStack {
             SectionTitle("Pause")
             Spacer()
-            switch model.state {
-            case .paused:
-                ChipButton(title: "Resume") { model.resume() }
-            default:
-                HStack(spacing: 8) {
-                    ChipButton(title: "30 min") { model.pause(minutes: 30) }
-                        .accessibilityLabel("Pause for 30 minutes")
-                    ChipButton(title: "1 hour") { model.pause(minutes: 60) }
-                        .accessibilityLabel("Pause for 1 hour")
+            ZStack(alignment: .trailing) {
+                switch model.state {
+                case .paused:
+                    ChipButton(title: "Resume") { model.resume() }
+                        .transition(.blurFade)
+                default:
+                    HStack(spacing: 8) {
+                        ChipButton(title: "30 min") { model.pause(minutes: 30) }
+                            .accessibilityLabel("Pause for 30 minutes")
+                        ChipButton(title: "1 hour") { model.pause(minutes: 60) }
+                            .accessibilityLabel("Pause for 1 hour")
+                    }
+                    .disabled(model.state == .disabled)
+                    .transition(.blurFade)
                 }
-                .disabled(model.state == .disabled)
             }
+            .animation(Motion.fade, value: isPaused)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -344,7 +409,9 @@ private struct BatterySection: View, Themed {
                 SectionTitle("Battery")
                 Spacer()
                 if let percent = battery.percent {
-                    Text("\(percent)%").font(.system(size: 15, weight: .semibold).monospacedDigit())
+                    Text("\(percent)%")
+                        .font(.system(size: 15, weight: .semibold).monospacedDigit())
+                        .ticking(percent)
                 }
             }
             if let percent = battery.percent {
@@ -353,6 +420,7 @@ private struct BatterySection: View, Themed {
                         Capsule().fill(palette.track)
                         Capsule().fill(color(percent)).frame(width: geo.size.width * CGFloat(percent) / 100)
                     }
+                    .settling(percent)
                 }
                 .frame(height: 7)
                 .padding(.top, 8)
@@ -421,19 +489,26 @@ private struct AgentRow: View, Themed {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .opacity(isActive ? 1 : palette.idleRow)
-            if summary.working > 0 {
-                status(summary.sessions == 1 ? "1 session" : "\(summary.sessions) sessions", dot: Palette.green)
-            } else if summary.waiting > 0 {
-                status("Needs you", dot: Palette.orange)
-            } else {
-                Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
+            Group {
+                if summary.working > 0 {
+                    status(summary.sessions == 1 ? "1 session" : "\(summary.sessions) sessions", dot: Palette.green)
+                } else if summary.waiting > 0 {
+                    status("Needs you", dot: Palette.orange)
+                } else {
+                    Text("Idle").font(.system(size: 12)).foregroundStyle(palette.tertiaryText)
+                }
             }
+            .id(statusKey)
+            .transition(.blurFade)
         }
-        .animation(Motion.fade, value: isActive)
+        .animation(Motion.fade, value: statusKey)
         .accessibilityElement(children: .combine)
     }
 
     private var isActive: Bool { summary.working + summary.waiting > 0 }
+
+    /// Changes with the kind of status, not its count, so "1 session" becoming "2 sessions" stays in place.
+    private var statusKey: String { summary.working > 0 ? "working" : summary.waiting > 0 ? "waiting" : "idle" }
 
     private func status(_ text: String, dot: Color) -> some View {
         HStack(spacing: 8) {
@@ -460,6 +535,7 @@ private struct Collapsible<Content: View>: View {
             }
             .clipped()
             .opacity(expanded ? 1 : 0)
+            .allowsHitTesting(expanded)
             .accessibilityHidden(!expanded)
     }
 }
@@ -801,6 +877,7 @@ private struct PoolBar: View, Themed {
             let left = Text("\(window.leftPercent)%")
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(verdict == .fine ? .white : verdict.color)
+                .ticking(window.leftPercent)
                 .frame(minWidth: 34, alignment: .trailing)
             let reset = Text(window.resetsAt.map { compact(until: $0, now: now) } ?? "")
                 .font(Font(Self.resetFont))
@@ -836,7 +913,7 @@ private struct PoolBar: View, Themed {
             .accessibilityLabel([window.label, "\(window.leftPercent)% left", detail].filter { !$0.isEmpty }
                 .joined(separator: ", "))
         }
-        .animation(Motion.settle, value: window.usedPercent)
+        .settling(window.usedPercent)
     }
 
     /// One account's share of the bar: what's left. Any share above zero shows at least a full dot,
@@ -1047,22 +1124,22 @@ private struct PillSwitchBody: View, Themed {
 }
 
 /// The menu is designed dark only, so force the popover window's appearance. Also reports each time
-/// the window comes on screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra.
+/// the window comes on or off screen, which SwiftUI's `onAppear` doesn't promise for a menu bar extra.
 private struct MenuWindow: NSViewRepresentable {
-    let onShow: () -> Void
+    let onVisibility: (Bool) -> Void
 
     func makeNSView(context: Context) -> WatchingView {
         let view = WatchingView()
-        view.onShow = onShow
+        view.onVisibility = onVisibility
         return view
     }
 
     func updateNSView(_ nsView: WatchingView, context: Context) {
-        nsView.onShow = onShow
+        nsView.onVisibility = onVisibility
     }
 
     final class WatchingView: NSView {
-        var onShow: () -> Void = {}
+        var onVisibility: (Bool) -> Void = { _ in }
         private var observer: NSObjectProtocol?
 
         override func viewDidMoveToWindow() {
@@ -1074,11 +1151,11 @@ private struct MenuWindow: NSViewRepresentable {
                 forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
-                    self.onShow()
+                    guard let self else { return }
+                    self.onVisibility(self.window?.occlusionState.contains(.visible) == true)
                 }
             }
-            if window.occlusionState.contains(.visible) { onShow() }
+            if window.occlusionState.contains(.visible) { onVisibility(true) }
         }
     }
 }
