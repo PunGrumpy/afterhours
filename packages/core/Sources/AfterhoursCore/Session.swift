@@ -6,6 +6,35 @@ public enum AgentState: String, Codable, Sendable {
     case idle
 }
 
+/// How many sessions are in each state, and the words the menu uses for them, so every number it shows counts sessions.
+public struct SessionTally: Sendable, Equatable {
+    public let working: Int
+    public let waiting: Int
+    public let idle: Int
+
+    public var total: Int { working + waiting + idle }
+
+    public init(_ states: [AgentState]) {
+        working = states.filter { $0 == .working }.count
+        waiting = states.filter { $0 == .waiting }.count
+        idle = states.filter { $0 == .idle }.count
+    }
+
+    /// The summary for the whole Agents section.
+    public var sectionStatus: String {
+        if total == 0 { return "No sessions" }
+        if working == 0 { return "\(total) \(total == 1 ? "session" : "sessions") open" }
+        return "\(working) of \(total) \(total == 1 ? "session" : "sessions") working"
+    }
+
+    /// One agent's row, in the order a glance needs them, leaving out what is zero.
+    public var rowStatus: [String] {
+        [(working, "working"), (waiting, "needs you"), (idle, "idle")]
+            .filter { $0.0 > 0 }
+            .map { "\($0.0) \($0.1)" }
+    }
+}
+
 /// What a hook event means for the session that sent it.
 public enum HookAction: Equatable, Sendable {
     case set(AgentState)
