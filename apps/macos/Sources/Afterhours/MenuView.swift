@@ -662,7 +662,7 @@ private struct PoolRows: View, Themed {
     /// As wide as the card's longest window name, so its bars line up and short names leave them room.
     private var labelWidth: CGFloat {
         let widths = pool.windows.map { ($0.label as NSString).size(withAttributes: [.font: PoolBar.labelFont]).width }
-        return min(140, (widths.max() ?? 0).rounded(.up))
+        return min(180, (widths.max() ?? 0).rounded(.up))
     }
 
     private var name: some View {

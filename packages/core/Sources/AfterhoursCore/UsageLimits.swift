@@ -5,6 +5,8 @@ import Foundation
 public struct UsageWindow: Sendable, Identifiable, Equatable {
     public enum Kind: Int, Sendable, Comparable {
         case session, weekly, monthly
+        /// A window of no stated length, which keeps its reported label.
+        case other
 
         public static func < (lhs: Kind, rhs: Kind) -> Bool { lhs.rawValue < rhs.rawValue }
     }
@@ -79,6 +81,7 @@ public extension UsageWindow.Kind {
         case .session: 5 * 3600
         case .weekly: 7 * 24 * 3600
         case .monthly: 30 * 24 * 3600
+        case .other: 0
         }
     }
 }
@@ -201,6 +204,7 @@ public enum UsageLimits {
         struct OAuth: Decodable {
             let accessToken: String?
             let subscriptionType: String?
+            let rateLimitTier: String?
         }
 
         let claudeAiOauth: OAuth?
@@ -224,9 +228,40 @@ public enum UsageLimits {
             let scope: Scope?
         }
 
+        /// Money in minor units, so 1250 with exponent 2 is 12.50.
+        struct Money: Decodable {
+            let amountMinor: Double?
+            let currency: String?
+            let exponent: Int?
+        }
+
+        struct Spend: Decodable {
+            let enabled: Bool?
+            let used: Money?
+            let limit: Money?
+        }
+
+        struct ExtraUsage: Decodable {
+            let isEnabled: Bool?
+            let monthlyLimit: Double?
+            let usedCredits: Double?
+            let utilization: Double?
+        }
+
         let fiveHour: Window?
         let sevenDay: Window?
         let limits: [Limit]?
+        let spend: Lenient<Spend>?
+        let extraUsage: Lenient<ExtraUsage>?
+    }
+
+    /// Reads a field that may change shape without failing the whole response around it.
+    struct Lenient<Value: Decodable>: Decodable {
+        let value: Value?
+
+        init(from decoder: Decoder) throws {
+            value = try? Value(from: decoder)
+        }
     }
 
     static let claudeUsageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
@@ -238,7 +273,9 @@ public enum UsageLimits {
             guard let credentials = claudeCredentials(in: dir),
                   let token = credentials.claudeAiOauth?.accessToken, !token.isEmpty
             else { continue }
-            let plan = credentials.claudeAiOauth?.subscriptionType.map(capitalized)
+            let plan = credentials.claudeAiOauth?.subscriptionType.map {
+                claudePlanName(subscriptionType: $0, rateLimitTier: credentials.claudeAiOauth?.rateLimitTier)
+            }
             let result = await fetch(claudeUsageURL, token: token, headers: claudeHeaders)
             accounts.append(claudeAccount(result, plan: plan, locations: [shortPath(dir)], source: nil))
         }
@@ -269,10 +306,71 @@ public enum UsageLimits {
         }
         for limit in usage.limits ?? [] where limit.kind == "weekly_scoped" {
             guard let name = limit.scope?.model?.displayName, let percent = limit.percent else { continue }
-            windows.append(UsageWindow(id: "seven_day_\(name.lowercased())", kind: .weekly, label: "Weekly · \(name)",
+            windows.append(UsageWindow(id: "seven_day_\(slug(name))", kind: .weekly, label: "Weekly · \(name)",
                                        usedPercent: percent, resetsAt: limit.resetsAt.flatMap(parseISO8601)))
         }
+        if let percent = claudeSpendPercent(usage) {
+            windows.append(UsageWindow(id: "monthly_spend", kind: .monthly, label: "Monthly spend",
+                                       usedPercent: percent, resetsAt: nil))
+        }
         return windows
+    }
+
+    /// Lowercase letters and digits, with each run of anything else as one underscore.
+    static func slug(_ text: String) -> String {
+        var result = ""
+        var pendingSeparator = false
+        for scalar in text.lowercased().unicodeScalars {
+            if (scalar >= "a" && scalar <= "z") || (scalar >= "0" && scalar <= "9") {
+                if pendingSeparator { result += "_" }
+                pendingSeparator = false
+                result.unicodeScalars.append(scalar)
+            } else {
+                pendingSeparator = true
+            }
+        }
+        return pendingSeparator ? result + "_" : result
+    }
+
+    /// The spend budget when it has a limit in one currency, else extra usage, whose `utilization` is already a percent.
+    private static func claudeSpendPercent(_ usage: ClaudeUsage) -> Double? {
+        // Minor units only compare when currency and scale match, and the response's own percent is rounded.
+        if let spend = usage.spend?.value, spend.enabled == true,
+           let used = spend.used, let limit = spend.limit,
+           let currency = used.currency?.trimmingCharacters(in: .whitespaces), !currency.isEmpty,
+           currency == limit.currency?.trimmingCharacters(in: .whitespaces),
+           used.exponent == limit.exponent,
+           let percent = percentOf(used: used.amountMinor, limit: limit.amountMinor) {
+            return percent
+        }
+        guard let extra = usage.extraUsage?.value, extra.isEnabled == true else { return nil }
+        if let percent = percentOf(used: extra.usedCredits, limit: extra.monthlyLimit) { return percent }
+        guard let utilization = extra.utilization, utilization.isFinite, utilization >= 0 else { return nil }
+        return min(100, utilization)
+    }
+
+    private static func percentOf(used: Double?, limit: Double?) -> Double? {
+        guard let used, let limit, used.isFinite, limit.isFinite, used >= 0, limit > 0 else { return nil }
+        return min(100, used / limit * 100)
+    }
+
+    /// Names a plan the way Claude does since Anthropic renamed Max 20x to Ultra and Max 5x to Max.
+    static func claudePlanName(subscriptionType: String, rateLimitTier: String?) -> String {
+        func normalized(_ text: String) -> String {
+            text.lowercased().filter { $0 != " " && $0 != "_" && $0 != "-" }
+        }
+        let type = normalized(subscriptionType)
+        if normalized(rateLimitTier ?? "").contains("max20x") || type == "max20" || type == "claudemax20xsubscription" {
+            return "Ultra"
+        }
+        switch type {
+        case "max", "maxplan", "max5", "claudemaxsubscription", "claudemax5xsubscription": return "Max"
+        case "pro", "claudeprosubscription": return "Pro"
+        case "team", "claudeteamsubscription": return "Team"
+        case "enterprise", "claudeenterprisesubscription": return "Enterprise"
+        case "free", "claudefreesubscription": return "Free"
+        default: return capitalized(subscriptionType)
+        }
     }
 
     /// Claude Code keeps its login in the Keychain on macOS, under a service named after the config dir.
@@ -353,7 +451,8 @@ public enum UsageLimits {
         switch result.flatMap({ decode(CodexUsage.self, from: $0) }) {
         case .success(let usage):
             UsageAccount(provider: "codex", plan: (usage.planType ?? fallbackPlan).map(codexPlanName),
-                         locations: locations, source: source, windows: codexWindows(usage))
+                         locations: locations, source: source,
+                         windows: codexWindows(usage, plan: usage.planType ?? fallbackPlan))
         case .failure(let error):
             UsageAccount(provider: "codex", plan: fallbackPlan.map(codexPlanName), locations: locations,
                          source: source, windows: [],
@@ -361,11 +460,13 @@ public enum UsageLimits {
         }
     }
 
-    private static func codexWindows(_ usage: CodexUsage) -> [UsageWindow] {
+    private static func codexWindows(_ usage: CodexUsage, plan: String?) -> [UsageWindow] {
         let week: TimeInterval = 7 * 24 * 3600
         let month: TimeInterval = 30 * 24 * 3600
+        // Free and Go plans have one monthly allowance in the primary slot, where paid plans have a five-hour one.
+        let primary: TimeInterval = plan.map { ["free", "go"].contains($0.lowercased()) } == true ? month : 5 * 3600
         let positions: [(String, CodexUsage.Window?, TimeInterval)] = [
-            ("primary", usage.rateLimit?.primaryWindow, 5 * 3600),
+            ("primary", usage.rateLimit?.primaryWindow, primary),
             ("secondary", usage.rateLimit?.secondaryWindow, week),
         ]
         return positions.compactMap { id, window, fallback in
@@ -376,6 +477,7 @@ public enum UsageLimits {
             case .session: "Session"
             case .weekly: "Weekly"
             case .monthly: "Monthly"
+            case .other: "Limit"
             }
             let resetsAt = window.resetAt.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil }
             return UsageWindow(id: id, kind: kind, label: label, usedPercent: percent, resetsAt: resetsAt, duration: seconds)
@@ -576,6 +678,11 @@ public enum UsageLimits {
         case network(String)
         case status(Int)
         case decoding
+
+        /// True when the provider refused the token itself, so asking again elsewhere can't help.
+        var isUnauthorized: Bool {
+            if case .status(401) = self { true } else { false }
+        }
 
         func message(signIn: String) -> String {
             switch self {
