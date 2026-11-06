@@ -452,10 +452,14 @@ const Base = () => (
   </div>
 );
 
+const SectionTitle = ({ children }: { children: ReactNode }) => (
+  <h3 className="text-[12px] font-semibold text-white/55">{children}</h3>
+);
+
 interface MenuProps {
   open: boolean;
   hold: Hold;
-  status: string;
+  headline: { title: string; detail: string };
   enabled: boolean;
   paused: boolean;
   list: DemoAgent[];
@@ -473,7 +477,7 @@ interface MenuProps {
 const Menu = ({
   open,
   hold,
-  status,
+  headline,
   enabled,
   paused,
   list,
@@ -514,12 +518,17 @@ const Menu = ({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] leading-5 font-bold">Afterhours</p>
           <p
-            key={hold}
+            key={`${hold}-title`}
+            className="blur-in text-[15px] leading-5 font-bold tabular-nums"
+          >
+            {headline.title}
+          </p>
+          <p
+            key={`${hold}-detail`}
             className="blur-in text-[12px] leading-4 text-white/55 tabular-nums"
           >
-            {status}
+            {headline.detail}
           </p>
         </div>
         <Switch on={enabled} onToggle={onToggle} />
@@ -527,30 +536,29 @@ const Menu = ({
 
       <Divider />
       <section className="px-4 py-2.5">
-        <h3 className="text-[15px] font-bold">Battery</h3>
-        <div className="mt-2.5 h-[7px] rounded-full bg-white/15">
+        <div className="flex items-baseline justify-between">
+          <SectionTitle>Battery</SectionTitle>
+          <span className="text-[15px] font-semibold tabular-nums">
+            {BATTERY}%
+          </span>
+        </div>
+        <div className="mt-2 h-[7px] rounded-full bg-white/15">
           <div
             className="bg-mac-green h-full rounded-full"
             style={{ width: `${BATTERY}%` }}
           />
         </div>
-        <div className="mt-2 flex justify-between text-[12px] tabular-nums">
-          <span className="font-medium">{BATTERY}% left</span>
-          <span className="text-white/45 contrast-more:text-white/75">
-            Stops below {CUTOFF}%
-          </span>
-        </div>
-        {holding && (
-          <p className="mt-1 text-[12px] text-white/55 tabular-nums">
-            About {span(HOLD_MINUTES_LEFT)} until it sleeps at {CUTOFF}%
-          </p>
-        )}
+        <p className="mt-2 text-[12px] text-white/55 tabular-nums">
+          {holding
+            ? `About ${span(HOLD_MINUTES_LEFT)} until it sleeps at ${CUTOFF}%`
+            : `On battery · Stops below ${CUTOFF}%`}
+        </p>
       </section>
 
       <Divider />
       <section className="px-4 py-2.5">
         <div className="flex items-baseline justify-between">
-          <h3 className="text-[15px] font-bold">Agents</h3>
+          <SectionTitle>Agents</SectionTitle>
           <span className="text-[12px] text-white/45 tabular-nums contrast-more:text-white/75">
             {sectionStatus(list)}
           </span>
@@ -580,7 +588,7 @@ const Menu = ({
 
       <Divider />
       <section className="flex items-center justify-between px-4 py-2.5">
-        <h3 className="text-[15px] font-bold">Pause</h3>
+        <SectionTitle>Pause</SectionTitle>
         <div className="flex gap-2">
           {paused ? (
             <Chip onClick={onResume}>Resume</Chip>
@@ -764,12 +772,18 @@ export const Demo = () => {
     working: working.length > 0,
   });
 
-  const status: Record<Hold, string> = {
-    disabled: "Off. Your Mac sleeps normally",
-    idle: "Idle. Your Mac can sleep",
-    paused: `Paused until ${clock(pausedUntil ?? now)}`,
-    waiting: "Waiting for you while sessions are open",
-    working: `Awake for ${span(AWAKE_FOR + elapsed)} · lid can close`,
+  const headline: Record<Hold, { title: string; detail: string }> = {
+    disabled: { detail: "Your Mac sleeps normally", title: "Off" },
+    idle: { detail: "Your Mac can sleep", title: "Idle" },
+    paused: {
+      detail: `Until ${clock(pausedUntil ?? now)}`,
+      title: "Paused",
+    },
+    waiting: { detail: "While sessions are open", title: "Waiting for you" },
+    working: {
+      detail: "Lid can close",
+      title: `Awake for ${span(AWAKE_FOR + elapsed)}`,
+    },
   };
 
   const cycle = (id: string) => {
@@ -850,7 +864,7 @@ export const Demo = () => {
                     <Menu
                       open={menuOpen}
                       hold={hold}
-                      status={status[hold]}
+                      headline={headline[hold]}
                       enabled={enabled}
                       paused={paused}
                       list={list}
