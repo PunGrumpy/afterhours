@@ -546,7 +546,7 @@ export const Limits = ({
         }}
         className="group flex w-full items-center gap-1.5 text-left transition-opacity duration-150 ease-out active:opacity-55 active:duration-0"
       >
-        <span className="text-[15px] font-bold">Limits</span>
+        <span className="text-[12px] font-semibold text-white/55">Limits</span>
         <Chevron
           className={cn(
             "size-[11px] text-white/45 transition-transform duration-200 ease-out group-hover:text-white/55 motion-reduce:transition-none contrast-more:text-white/75",
