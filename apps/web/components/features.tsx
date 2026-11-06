@@ -82,15 +82,16 @@ export const Features = () => (
       title="Lets go before your battery does"
       visual={
         <div className="w-full max-w-[200px]">
-          <div className="bg-ink/10 relative h-2 rounded-full">
+          <div className="flex items-baseline justify-between">
+            <span className="text-ink/60 text-[12px] font-semibold">
+              Battery
+            </span>
+            <span className="text-[15px] font-semibold tabular-nums">23%</span>
+          </div>
+          <div className="bg-ink/10 mt-2 h-[7px] rounded-full">
             <div className="bg-mac-orange h-full w-[23%] rounded-full" />
-            <div className="bg-mac-red absolute -top-1.5 left-[15%] h-5 w-0.5 rounded-full" />
           </div>
-          <div className="mt-2.5 flex justify-between text-[13px] tabular-nums">
-            <span className="font-medium">23% left</span>
-            <span className="text-ink/60">Stops below 15%</span>
-          </div>
-          <p className="text-ink/60 mt-1.5 text-[13px] tabular-nums">
+          <p className="text-ink/60 mt-2 text-[12px] tabular-nums">
             About 25m until it sleeps at 15%
           </p>
         </div>
