@@ -453,7 +453,9 @@ const Base = () => (
 );
 
 const SectionTitle = ({ children }: { children: ReactNode }) => (
-  <h3 className="text-[12px] font-semibold text-white/55">{children}</h3>
+  <h3 className="text-[12px] font-semibold text-white/55 contrast-more:text-white/85">
+    {children}
+  </h3>
 );
 
 interface MenuProps {
@@ -526,7 +528,7 @@ const Menu = ({
           </p>
           <p
             key={`${hold}-detail`}
-            className="blur-in text-[12px] leading-4 text-white/55 tabular-nums"
+            className="blur-in text-[12px] leading-4 text-white/55 tabular-nums contrast-more:text-white/85"
           >
             {headline.detail}
           </p>
@@ -548,7 +550,7 @@ const Menu = ({
             style={{ width: `${BATTERY}%` }}
           />
         </div>
-        <p className="mt-2 text-[12px] text-white/55 tabular-nums">
+        <p className="mt-2 text-[12px] text-white/55 tabular-nums contrast-more:text-white/85">
           {holding
             ? `About ${span(HOLD_MINUTES_LEFT)} until it sleeps at ${CUTOFF}%`
             : `On battery · Stops below ${CUTOFF}%`}
