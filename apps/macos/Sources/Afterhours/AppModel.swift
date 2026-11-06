@@ -95,17 +95,14 @@ final class AppModel {
             source.resume()
             terminationSignals.append(source)
         }
+        // The first scan only sets a CPU baseline, so the tick runs before anything awaited and the loop below
+        // sees the detected agents when it picks its first delay.
+        tick()
         if prefs.notifications, Self.canNotify {
-            // A denied app must stay silent from the first hold on, so the status is read before the first tick;
-            // the permission prompt comes after it, so the hold never waits on an answer.
+            // The prompt comes after the first tick, so the hold never waits on an answer.
             Task { [weak self] in
-                guard let self else { return }
-                await refreshNotificationStatus()
-                tick()
-                await askForNotificationAccess()
+                await self?.askForNotificationAccess()
             }
-        } else {
-            tick()
         }
         watchSessions()
         // The tolerance lets macOS coalesce this wakeup with others instead of waking the CPU just for it.
@@ -557,8 +554,15 @@ final class AppModel {
     }
 
     private func announce(_ title: String, body: String, kind: NoticeKind) {
-        if !prefs.sound.isEmpty, !(prefs.notifications && notificationStatus == .denied) {
-            NSSound(named: NSSound.Name(prefs.sound))?.play()
+        if !prefs.sound.isEmpty {
+            let sound = prefs.sound
+            // Read when the chime is due, so someone who denied stays silent and allowing later needs no relaunch.
+            Task { [weak self] in
+                guard let self else { return }
+                if prefs.notifications { await refreshNotificationStatus() }
+                guard !(prefs.notifications && notificationStatus == .denied) else { return }
+                NSSound(named: NSSound.Name(sound))?.play()
+            }
         }
         guard prefs.notifications, Self.canNotify else { return }
         let content = UNMutableNotificationContent()
