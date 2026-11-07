@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
-    "cn": "^0.5.0",
-    "next": "16.4.3",
+    "cn": "^0.5.2",
+    "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
