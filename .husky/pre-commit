@@ -8,8 +8,21 @@ fi
 
 PARTIAL_FILES=$(git diff --name-only)
 
+# Not a pipe: a subshell would drop the argument list when the loop ends. Not a symlink: the formatter
+# would follow it and rewrite its target, which can sit outside the repo.
+set --
+while IFS= read -r file; do
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    set -- "$@" "$file"
+  fi
+done <<EOF
+$STAGED_FILES
+EOF
+
 FORMAT_EXIT_CODE=0
-bun x ultracite fix || FORMAT_EXIT_CODE=$?
+if [ "$#" -gt 0 ]; then
+  bun x ultracite fix "$@" || FORMAT_EXIT_CODE=$?
+fi
 
 echo "$STAGED_FILES" | while IFS= read -r file; do
   if [ ! -f "$file" ]; then
