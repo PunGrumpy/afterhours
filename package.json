@@ -21,8 +21,8 @@
     "eslint-plugin-github": "6.1.2",
     "eslint-plugin-sonarjs": "^4.2.2",
     "husky": "^9.1.7",
-    "oxfmt": "^0.76.0",
-    "oxlint": "^1.91.0",
+    "oxfmt": "^0.78.0",
+    "oxlint": "^1.93.0",
     "oxlint-plugin-react-doctor": "^0.9.22",
     "turbo": "^2.11.10",
     "ultracite": "8.1.1"
