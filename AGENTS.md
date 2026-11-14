@@ -8,8 +8,13 @@ A macOS menu bar app that keeps a Mac awake while coding agents work, plus its m
 - `packages/core` holds `AfterhoursCore`, the library both executables share: process inspection, session files, and subscription usage readers. It stays nonisolated so callers decide where its code runs.
 - `apps/web` is the Next.js 16 marketing site. Bun workspaces and Turborepo tie the three packages together.
 
+## Set up a checkout
+
+Run `export PATH="$HOME/.bun/bin:$PATH"` where Bun isn't on your PATH, then a plain `bun install`. Don't pass `--ignore-scripts`: it skips installing the commit hook, so your commits then go in unformatted without a warning.
+
 ## Build the app
 
+- `swift build --package-path apps/macos` is the fast incremental build for the edit loop. `build-app.sh` stays what CI and releases run.
 - `./apps/macos/scripts/build-app.sh` builds `apps/macos/build/Afterhours.app` with plain `swiftc`, so it works with the Command Line Tools alone. Set `ARCHS=arm64` for a faster single-arch build, and add `--install` to copy the app to `/Applications` and launch it. CI runs this script; don't switch it to `swift build`.
 - The executables compile with `-default-isolation MainActor`. `AfterhoursCore` doesn't, because it's a library and callers should decide where its code runs.
 - `./apps/macos/scripts/package-app.sh` turns an existing build into the `.dmg`, `.zip`, and checksums for a release.
@@ -18,6 +23,8 @@ A macOS menu bar app that keeps a Mac awake while coding agents work, plus its m
 
 `Afterhours --snapshot out.png [expanded] [crowded] [tall]` renders the menu with sample data and writes it to a PNG; `crowded` renders seven providers, and `tall` adds every agent and caps the height so the middle scrolls. `Afterhours --snapshot-settings out.png [general|power|agents|limits|hub]` renders one Settings tab the same way. `Afterhours --snapshot-motion out.png [limits|pool|pause]` hosts the menu in a window, flips that one state, and writes a filmstrip of frames stamped with when each was really captured, so you can judge an animation from its in-between frames. Judge a visual change by opening the PNG, not by reading the view code.
 
+`./apps/macos/scripts/snapshots.sh [out-dir]` builds with SwiftPM and renders the menu, Settings and motion snapshots in parallel into `apps/macos/build/snapshots` by default, which takes seconds on a warm build. Set `APP=<path to an .app>` to skip the build and render from that bundle instead; the script accepts only a bundle in this checkout's `build` folder that is newer than the sources. The debug build links an older SDK than the release does, so Settings pages and some controls draw in the older system style. For a last look before a release, run `ARCHS=arm64 ./apps/macos/scripts/build-app.sh`, then `APP=apps/macos/build/Afterhours.app ./apps/macos/scripts/snapshots.sh`.
+
 ## Restart the app on a closed lid
 
 The app holds a closed Mac awake with IOKit power assertions that die the instant the process exits. Killing or relaunching it lets a closed Mac fall into clamshell sleep within about a second, even on AC power, cutting remote clients like T3 Code or SSH. Run `caffeinate -s -t 300 &` before you kill, relaunch, or `--install` a build on a closed laptop.
@@ -25,7 +32,7 @@ The app holds a closed Mac awake with IOKit power assertions that die the instan
 ## Verify changes
 
 - `bun run check` runs Ultracite (oxlint and oxfmt) over JS, TS, CSS, and Markdown. It doesn't touch Swift.
-- `swift test --package-path packages/core` runs the core tests with Swift Testing. CI runs it on `macos-26`. Local `swift test` needs a working SwiftPM and Swift Testing toolchain, so treat CI as the source of truth.
+- `swift test --package-path packages/core` runs the core tests with Swift Testing. It runs locally, and CI on `macos-26` decides when the two disagree.
 - `bunx turbo run build --filter=@afterhours/web` builds the site.
 - CI only builds the apps Turborepo marks as affected. A change under `packages/core` counts as a change to the macOS app.
 
