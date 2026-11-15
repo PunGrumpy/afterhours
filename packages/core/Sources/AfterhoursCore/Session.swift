@@ -20,11 +20,16 @@ public struct SessionTally: Sendable, Equatable {
         idle = states.filter { $0 == .idle }.count
     }
 
-    /// The summary for the whole Agents section.
+    /// The summary for the whole Agents section, leading with the sessions that need you.
     public var sectionStatus: String {
         if total == 0 { return "No sessions" }
-        if working == 0 { return "\(total) \(total == 1 ? "session" : "sessions") open" }
-        return "\(working) of \(total) \(total == 1 ? "session" : "sessions") working"
+        let sessions = "\(total) \(total == 1 ? "session" : "sessions")"
+        if waiting > 0 {
+            let needs = "\(waiting) \(waiting == 1 ? "needs" : "need") you"
+            return working > 0 ? "\(needs) · \(working) working" : "\(needs) · \(sessions) open"
+        }
+        if working == 0 { return "\(sessions) open" }
+        return "\(working) of \(sessions) working"
     }
 
     /// One agent's row, in the order a glance needs them, leaving out what is zero.
@@ -40,12 +45,21 @@ public enum HookAction: Equatable, Sendable {
     case set(AgentState)
     case end
 
-    /// Claude Code event names. Unknown events map to nil so the hook stays quiet.
-    public init?(claudeEvent event: String) {
+    /// The Claude Code notification types that mean a person is needed; others, like `idle_prompt`, only say a session went quiet.
+    private static let notificationsThatNeedYou: Set<String> = [
+        "permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "worker_permission_prompt", "agent_needs_input",
+    ]
+
+    /// Claude Code event names. Unknown events and notifications map to nil so the hook stays quiet.
+    public init?(claudeEvent event: String, notificationType: String? = nil) {
         switch event {
         case "SessionStart", "Stop": self = .set(.idle)
         case "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact": self = .set(.working)
-        case "Notification", "PermissionRequest": self = .set(.waiting)
+        case "PermissionRequest": self = .set(.waiting)
+        case "Notification":
+            // Older Claude Code sends no type, so the event alone decides.
+            guard notificationType.map(Self.notificationsThatNeedYou.contains) ?? true else { return nil }
+            self = .set(.waiting)
         case "SessionEnd": self = .end
         default: return nil
         }

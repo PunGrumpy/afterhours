@@ -48,10 +48,51 @@ import Testing
 @Test func sectionStatusCountsSessionsNotAgents() {
     #expect(SessionTally([]).sectionStatus == "No sessions")
     #expect(SessionTally([.idle]).sectionStatus == "1 session open")
-    #expect(SessionTally([.idle, .waiting, .idle]).sectionStatus == "3 sessions open")
+    #expect(SessionTally([.idle, .idle]).sectionStatus == "2 sessions open")
     #expect(SessionTally([.working]).sectionStatus == "1 of 1 session working")
-    #expect(SessionTally([.working, .idle, .idle, .waiting]).sectionStatus == "1 of 4 sessions working")
+    #expect(SessionTally([.working, .idle, .idle]).sectionStatus == "1 of 3 sessions working")
     #expect(SessionTally([.working, .working]).sectionStatus == "2 of 2 sessions working")
+}
+
+@Test func sectionStatusLeadsWithWhoNeedsYouWhenSomeoneWorks() {
+    #expect(SessionTally([.working, .waiting]).sectionStatus == "1 needs you · 1 working")
+    #expect(SessionTally([.working, .working, .working, .waiting]).sectionStatus == "1 needs you · 3 working")
+    #expect(SessionTally([.working, .idle, .idle, .waiting]).sectionStatus == "1 needs you · 1 working")
+    let crowd = [AgentState](repeating: .waiting, count: 6) + [AgentState](repeating: .working, count: 11)
+    #expect(SessionTally(crowd).sectionStatus == "6 need you · 11 working")
+}
+
+@Test func sectionStatusLeadsWithWhoNeedsYouWhenNobodyWorks() {
+    #expect(SessionTally([.waiting]).sectionStatus == "1 needs you · 1 session open")
+    #expect(SessionTally([.idle, .waiting, .idle]).sectionStatus == "1 needs you · 3 sessions open")
+    #expect(SessionTally([.waiting, .waiting]).sectionStatus == "2 need you · 2 sessions open")
+}
+
+@Test func onlyAPermissionOrAQuestionNotificationMeansYouAreNeeded() {
+    #expect(HookAction(claudeEvent: "Notification", notificationType: nil) == .set(.waiting))
+    for type in ["permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "worker_permission_prompt", "agent_needs_input"] {
+        #expect(HookAction(claudeEvent: "Notification", notificationType: type) == .set(.waiting), "\(type)")
+    }
+}
+
+@Test func anIdleOrUnknownNotificationLeavesTheSessionAsItWas() {
+    #expect(HookAction(claudeEvent: "Notification", notificationType: "idle_prompt") == nil)
+    #expect(HookAction(claudeEvent: "Notification", notificationType: "auth_success") == nil)
+    #expect(HookAction(claudeEvent: "Notification", notificationType: "something_new") == nil)
+    #expect(HookAction(claudeEvent: "Notification", notificationType: "") == nil)
+}
+
+@Test func otherEventsIgnoreTheNotificationType() {
+    #expect(HookAction(claudeEvent: "PermissionRequest") == .set(.waiting))
+    #expect(HookAction(claudeEvent: "PermissionRequest", notificationType: "idle_prompt") == .set(.waiting))
+    for type in [nil, "idle_prompt", "permission_prompt"] {
+        #expect(HookAction(claudeEvent: "Stop", notificationType: type) == .set(.idle))
+        #expect(HookAction(claudeEvent: "SessionStart", notificationType: type) == .set(.idle))
+        #expect(HookAction(claudeEvent: "UserPromptSubmit", notificationType: type) == .set(.working))
+        #expect(HookAction(claudeEvent: "PreToolUse", notificationType: type) == .set(.working))
+        #expect(HookAction(claudeEvent: "SessionEnd", notificationType: type) == .end)
+        #expect(HookAction(claudeEvent: "SubagentStop", notificationType: type) == nil)
+    }
 }
 
 @Test func rowStatusListsOnlyTheStatesThatHaveSessions() {
