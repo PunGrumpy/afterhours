@@ -21,6 +21,11 @@ struct AfterhoursApp: App {
         if let index = arguments.firstIndex(of: "--snapshot-motion"), arguments.count > index + 1 {
             Self.snapshotMotion(to: arguments[index + 1], flip: arguments.dropFirst(index + 2).first ?? "limits")
         }
+        // A snapshot flag this build doesn't handle must end here, because a real launch changes power settings.
+        if let flag = arguments.dropFirst().first(where: { $0.hasPrefix("--snapshot") }) {
+            FileHandle.standardError.write(Data("Afterhours: \(flag) is unknown to this build, or it has no output path.\n".utf8))
+            exit(64)
+        }
         // Built only for a real run, because its init changes power settings and replaces the installed hook.
         _model = State(initialValue: AppModel())
     }
