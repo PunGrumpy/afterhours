@@ -18,7 +18,7 @@ struct AgentSession: Equatable {
 @Observable
 final class AppModel {
     let prefs: Preferences
-    let usage = UsageMonitor()
+    let usage: UsageMonitor
 
     private(set) var sessions: [AgentSession] = []
     private(set) var state: HoldState = .idle
@@ -69,6 +69,7 @@ final class AppModel {
 
     init() {
         prefs = Preferences()
+        usage = UsageMonitor(file: AfterhoursPaths.usage)
         // Recover from a previous crash that left lid sleep disabled.
         if Power.sleepDisabled, LidControl.isInstalled { LidControl.setSleepDisabled(false) }
         do { try ClaudeHooks.installHookBinary() } catch {
@@ -100,6 +101,10 @@ final class AppModel {
         // The first scan only sets a CPU baseline, so the tick runs before anything awaited and the loop below
         // sees the detected agents when it picks its first delay.
         tick()
+        // After the tick, so reading a file never delays the hold; nothing renders or finishes a read before `init` returns.
+        if prefs.usageLimits { usage.restore() }
+        // Quiet launches read too, so the saved bars are replaced by the first click; the tick may have started it.
+        if prefs.usageLimits, !usage.refreshing { refreshUsage(minimumAge: 0) }
         if prefs.notifications, Self.canNotify {
             // The prompt comes after the first tick, so the hold never waits on an answer.
             Task { [weak self] in
@@ -122,14 +127,15 @@ final class AppModel {
     }
 
     /// A model with sample state and no side effects, for rendering the menu outside the app.
-    init(preview: Preferences, crowded: Bool = false, tall: Bool = false, needs: Bool = false) {
+    init(preview: Preferences, crowded: Bool = false, tall: Bool = false, needs: Bool = false, saved: Bool = false) {
         prefs = preview
+        usage = UsageMonitor(file: nil)
         state = .holding
         holdingSince = Date().addingTimeInterval(-83 * 60)
         battery = BatteryStatus(percent: 64, onAC: false, charging: false, minutesToEmpty: 310)
         installedAgents = tall ? Set(AgentKind.all.map(\.id)) : ["claude", "codex", "opencode"]
         sessions = Self.sampleSessions(crowded: crowded, tall: tall, needs: needs)
-        usage.seed(Self.sampleUsage(crowded: crowded))
+        usage.seed(Self.sampleReading(crowded: crowded, saved: saved))
     }
 
     /// `tall` adds every agent, each with sessions in mixed states when `crowded`, so the menu has more rows than a screen.
@@ -150,6 +156,17 @@ final class AppModel {
 
     /// Moves a preview model to another state, so a snapshot can flip it and film the change.
     func preview(state next: HoldState) { state = next }
+
+    /// With `saved`, the sample goes through the real encoder and decoder as a reading from yesterday, after one session window reset.
+    private static func sampleReading(crowded: Bool, saved: Bool) -> UsageReading {
+        let snapshot = sampleUsage(crowded: crowded)
+        let now = Date()
+        let readAt = Dictionary(uniqueKeysWithValues: snapshot.accounts.map { ($0.id, saved ? now.addingTimeInterval(-86400) : now) })
+        let reading = UsageReading(snapshot: snapshot, readAt: readAt)
+        guard saved else { return reading }
+        let afterFirstReset = now.addingTimeInterval(2 * 3600)
+        return reading.saved().flatMap { UsageReading(saved: $0, now: afterFirstReset) } ?? reading
+    }
 
     private static func sampleUsage(crowded: Bool) -> UsageSnapshot {
         let now = Date()
@@ -280,7 +297,10 @@ final class AppModel {
     /// Opening the menu shows fresh sessions at once, even between quiet ticks.
     func menuOpened() {
         tick()
-        if prefs.usageLimits { refreshUsage(minimumAge: UsageMonitor.menuInterval) }
+        if prefs.usageLimits {
+            usage.expire()
+            refreshUsage(minimumAge: UsageMonitor.menuInterval)
+        }
     }
 
     private var nextTickDelay: TimeInterval {

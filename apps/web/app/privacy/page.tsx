@@ -52,7 +52,7 @@ const checks = [
 ];
 
 const Page = () => (
-  <LegalPage title="Privacy Policy" updated="October 12, 2026">
+  <LegalPage title="Privacy Policy" updated="November 15, 2026">
     <p>
       Afterhours is a menu bar app that runs on your Mac. It has no accounts and
       no servers, and it has no telemetry, analytics, crash reporting, or ads.
@@ -86,6 +86,16 @@ const Page = () => (
           hooks run.
         </li>
         <li>
+          The last subscription reading, in{" "}
+          <code>~/Library/Application Support/Afterhours/usage.json</code>, so
+          Limits shows at once after a restart. It holds each account&apos;s
+          plan, where its login lives (a config folder, or the account&apos;s
+          email for Grok Build, Antigravity and hub accounts), and each
+          window&apos;s share used and reset time. It holds no login, token,
+          key, or error message, and it never leaves your Mac. Turning off
+          subscription limits deletes it.
+        </li>
+        <li>
           Your settings, in the <code>app.afterhours.local</code> preferences.
         </li>
         <li>
@@ -116,12 +126,12 @@ const Page = () => (
       <p>
         Each check sends a login your tool already keeps on your Mac straight to
         that tool&apos;s own service, and reads back how much of each rate-limit
-        window is left. It runs when you open the menu and every 5 minutes while
-        agents work. Afterhours doesn&apos;t store, renew, or forward these
-        logins. Antigravity saves only a long-lived Google login, so Afterhours
-        asks Google for an access token that lasts an hour and keeps it in
-        memory. Nothing passes through a server of ours, because there
-        isn&apos;t one.
+        window is left. It runs when Afterhours starts, when you open the menu,
+        and every 5 minutes while agents work. Afterhours doesn&apos;t store,
+        renew, or forward these logins. Antigravity saves only a long-lived
+        Google login, so Afterhours asks Google for an access token that lasts
+        an hour and keeps it in memory. Nothing passes through a server of ours,
+        because there isn&apos;t one.
       </p>
       <div className="border-ink/[0.08] -mx-1 overflow-hidden rounded-[12px] border">
         <table className="w-full text-left text-[14px]">

@@ -6,16 +6,16 @@ struct AfterhoursApp: App {
     @State private var model: AppModel
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
-    /// `Afterhours --snapshot out.png [expanded] [crowded] [tall] [needs]` renders the menu with sample data and exits,
-    /// so the design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven show;
-    /// `tall` adds every agent and caps the menu's height at 620 points, so its middle scrolls; `needs` has an agent
-    /// waiting on you.
+    /// `Afterhours --snapshot out.png [expanded] [crowded] [tall] [needs] [saved]` renders the menu with sample data and
+    /// exits, so the design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven
+    /// show; `tall` adds every agent and caps the menu's height at 620 points, so its middle scrolls; `needs` has an agent
+    /// waiting on you; `saved` shows the sample as a reading restored from yesterday's file, without reading or writing it.
     init() {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--snapshot"), arguments.count > index + 1 {
             Self.snapshotMenu(to: arguments[index + 1], expanded: arguments.contains("expanded"),
                               crowded: arguments.contains("crowded"), tall: arguments.contains("tall"),
-                              needs: arguments.contains("needs"))
+                              needs: arguments.contains("needs"), saved: arguments.contains("saved"))
         }
         if let index = arguments.firstIndex(of: "--snapshot-settings"), arguments.count > index + 1 {
             Self.snapshotSettings(to: arguments[index + 1], page: arguments.dropFirst(index + 2).first ?? "general")
@@ -32,16 +32,18 @@ struct AfterhoursApp: App {
         _model = State(initialValue: AppModel())
     }
 
-    private static func previewModel(expanded: Bool, crowded: Bool, tall: Bool = false, needs: Bool = false) -> AppModel {
+    private static func previewModel(expanded: Bool, crowded: Bool, tall: Bool = false, needs: Bool = false,
+                                     saved: Bool = false) -> AppModel {
         let prefs = Preferences(defaults: UserDefaults(suiteName: "app.afterhours.snapshot")!)
         prefs.limitsExpanded = expanded
         prefs.hubs = [UsageHub(id: "sample", label: "Thaipass", url: "https://thaipass-proxy.vercel.app")]
-        return AppModel(preview: prefs, crowded: crowded, tall: tall, needs: needs)
+        return AppModel(preview: prefs, crowded: crowded, tall: tall, needs: needs, saved: saved)
     }
 
     /// The plain menu goes through ImageRenderer, which can't draw a scroll view, so `tall` renders in a real window.
-    private static func snapshotMenu(to path: String, expanded: Bool, crowded: Bool, tall: Bool, needs: Bool) -> Never {
-        let model = previewModel(expanded: expanded, crowded: crowded, tall: tall, needs: needs)
+    private static func snapshotMenu(to path: String, expanded: Bool, crowded: Bool, tall: Bool, needs: Bool,
+                                     saved: Bool) -> Never {
+        let model = previewModel(expanded: expanded, crowded: crowded, tall: tall, needs: needs, saved: saved)
         if tall {
             let menu = MenuView(model: model, prefs: model.prefs, snapshot: true, previewMaxHeight: 620)
             captureWindow(of: AnyView(menu), to: path, title: "Afterhours")

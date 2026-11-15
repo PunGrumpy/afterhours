@@ -21,6 +21,7 @@ RENDERS=(
   "menu-expanded --snapshot expanded"
   "menu-crowded --snapshot crowded"
   "menu-crowded-expanded --snapshot crowded expanded"
+  "menu-saved-expanded --snapshot saved expanded"
   "menu-tall --snapshot tall"
   "menu-tall-crowded --snapshot tall crowded"
   "menu-needs --snapshot needs"

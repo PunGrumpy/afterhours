@@ -100,6 +100,7 @@ public enum AfterhoursPaths {
 
     public static var sessions: URL { support.appendingPathComponent("sessions", isDirectory: true) }
     public static var bin: URL { support.appendingPathComponent("bin", isDirectory: true) }
+    public static var usage: URL { support.appendingPathComponent("usage.json") }
     public static var hookBinary: URL { bin.appendingPathComponent("afterhours-hook") }
 
     /// Replaces characters that aren't safe in a file name.
