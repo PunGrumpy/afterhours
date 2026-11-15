@@ -20,7 +20,8 @@ public enum HoldState: Equatable, Sendable {
 /// What a change between hold states tells the person, if anything.
 public enum HoldNotice: Equatable, Sendable {
     case started
-    case finished
+    /// `waitRanOut` is true when sessions are still open and the hold ended only because the wait for your reply did.
+    case finished(waitRanOut: Bool)
     case blocked(String)
 }
 
@@ -77,13 +78,14 @@ public enum HoldPolicy {
     }
 
     /// Off and paused are the person's own doing, so no change into or out of them speaks, and only holds that start or end do.
-    public static func notice(from: HoldState, to: HoldState) -> HoldNotice? {
+    public static func notice(from: HoldState, to: HoldState, lastReason: HoldReason, sessionsOpen: Bool) -> HoldNotice? {
         switch (from, to) {
         case (.disabled, _), (.paused, _), (_, .disabled), (_, .paused): nil
         case (.holding, .holding): nil
         case (_, .holding): .started
         case (.holding, .blocked(let reason)): .blocked(reason)
-        case (.holding, .idle): .finished
+        // With waiting turned off a hold ends straight from working, so open sessions alone don't mean a wait ran out.
+        case (.holding, .idle): .finished(waitRanOut: sessionsOpen && lastReason != .working)
         default: nil
         }
     }

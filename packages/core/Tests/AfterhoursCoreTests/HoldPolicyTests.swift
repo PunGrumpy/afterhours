@@ -124,33 +124,53 @@ private func reason(working: Bool = false, hasSessions: Bool = true, lastWorking
 
 private let until = now.addingTimeInterval(minutes(30))
 
-@Test func startingAHoldSpeaks() {
-    #expect(HoldPolicy.notice(from: .idle, to: .holding) == .started)
-    #expect(HoldPolicy.notice(from: .blocked("Your Mac is too hot"), to: .holding) == .started)
+/// The notice for a change, with nothing that points at a wait running out unless a test says so.
+private func notice(from: HoldState, to: HoldState, lastReason: HoldReason = .working,
+                    sessionsOpen: Bool = false) -> HoldNotice? {
+    HoldPolicy.notice(from: from, to: to, lastReason: lastReason, sessionsOpen: sessionsOpen)
 }
 
-@Test func finishingAHoldSpeaks() {
-    #expect(HoldPolicy.notice(from: .holding, to: .idle) == .finished)
+@Test func startingAHoldSpeaks() {
+    #expect(notice(from: .idle, to: .holding) == .started)
+    #expect(notice(from: .blocked("Your Mac is too hot"), to: .holding) == .started)
+}
+
+@Test func aHoldThatEndsWhenEverySessionClosesSaysTheAgentsFinished() {
+    #expect(notice(from: .holding, to: .idle) == .finished(waitRanOut: false))
+    #expect(notice(from: .holding, to: .idle, lastReason: .waitingForYou(until: nil)) == .finished(waitRanOut: false))
+}
+
+@Test func aHoldThatEndsInTheReplyWaitWithSessionsOpenSaysTheWaitRanOut() {
+    let timed = notice(from: .holding, to: .idle, lastReason: .waitingForYou(until: until), sessionsOpen: true)
+    #expect(timed == .finished(waitRanOut: true))
+    let unplugged = notice(from: .holding, to: .idle, lastReason: .waitingForYou(until: nil), sessionsOpen: true)
+    #expect(unplugged == .finished(waitRanOut: true))
+}
+
+@Test func withWaitingOffAHoldThatEndsWithSessionsOpenStillSaysTheAgentsFinished() {
+    // The tick after the work ends has no reason at all, so the hold's last reason is still working.
+    #expect(reason(lastWorkingAt: now.addingTimeInterval(-4), onAC: false, battery: 0, at: now) == nil)
+    #expect(notice(from: .holding, to: .idle, lastReason: .working, sessionsOpen: true) == .finished(waitRanOut: false))
 }
 
 @Test func aSafetyRuleEndingAHoldSaysWhich() {
-    #expect(HoldPolicy.notice(from: .holding, to: .blocked("Battery is below 15%")) == .blocked("Battery is below 15%"))
+    #expect(notice(from: .holding, to: .blocked("Battery is below 15%")) == .blocked("Battery is below 15%"))
 }
 
 @Test func yourOwnChangesStaySilent() {
     let states: [HoldState] = [.idle, .holding, .blocked("Low Power Mode is on")]
     for state in states {
-        #expect(HoldPolicy.notice(from: .disabled, to: state) == nil)
-        #expect(HoldPolicy.notice(from: state, to: .disabled) == nil)
-        #expect(HoldPolicy.notice(from: .paused(until: until), to: state) == nil)
-        #expect(HoldPolicy.notice(from: state, to: .paused(until: until)) == nil)
+        #expect(notice(from: .disabled, to: state) == nil)
+        #expect(notice(from: state, to: .disabled) == nil)
+        #expect(notice(from: .paused(until: until), to: state) == nil)
+        #expect(notice(from: state, to: .paused(until: until)) == nil)
     }
-    #expect(HoldPolicy.notice(from: .disabled, to: .paused(until: until)) == nil)
+    #expect(notice(from: .disabled, to: .paused(until: until)) == nil)
 }
 
 @Test func changesThatDoNotStartOrEndAHoldStaySilent() {
-    #expect(HoldPolicy.notice(from: .holding, to: .holding) == nil)
-    #expect(HoldPolicy.notice(from: .idle, to: .blocked("Your Mac isn't plugged in")) == nil)
-    #expect(HoldPolicy.notice(from: .blocked("Your Mac isn't plugged in"), to: .idle) == nil)
-    #expect(HoldPolicy.notice(from: .idle, to: .idle) == nil)
+    #expect(notice(from: .holding, to: .holding) == nil)
+    #expect(notice(from: .idle, to: .blocked("Your Mac isn't plugged in")) == nil)
+    #expect(notice(from: .blocked("Your Mac isn't plugged in"), to: .idle) == nil)
+    #expect(notice(from: .idle, to: .idle) == nil)
 }
