@@ -1,5 +1,17 @@
 # @afterhours/macos
 
+## 0.5.0
+
+### Minor Changes
+
+- 21f1e22: Limits shows your last reading the moment you open the menu, even right after a restart or an update. "As of" now gives the time of the bars you see.
+
+### Patch Changes
+
+- 47792b6: When an agent needs you, Afterhours lists it first, counts it in the Agents line and names it in the header. A Claude Code session that has just gone quiet no longer shows as needing you.
+- b86a6e8: When your Mac can sleep because the wait for your reply ran out, the notice says so instead of saying every agent finished.
+- 3c2a531: Afterhours clears away the temporary files a stopped hook leaves in its sessions folder, which could pile up by the hundreds.
+
 ## 0.4.2
 
 ### Patch Changes
