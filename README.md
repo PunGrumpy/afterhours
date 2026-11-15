@@ -126,6 +126,8 @@ The only network requests are the subscription checks described above. They run 
 
 Afterhours never stores, renews, or forwards a login anywhere else. Antigravity's access token stays in memory and is never written to disk. Turn the setting off, and no request goes out at all.
 
+So that Limits shows at once after a restart, Afterhours saves the last reading in `~/Library/Application Support/Afterhours/usage.json`. It holds each account's plan, where its login lives (a config folder, or the account's email for Grok Build, Antigravity and hub accounts), and each window's share used and reset time. It holds no login, token, key, or error message, and it never leaves your Mac. Turning **Show subscription limits in the menu** off deletes it.
+
 The hook receives each event Claude Code sends, which can include your prompt and a tool's input and output, and keeps only these fields in `~/Library/Application Support/Afterhours/sessions/`:
 
 - Session ID and agent name
