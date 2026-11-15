@@ -9,7 +9,8 @@ struct AfterhoursApp: App {
     /// `Afterhours --snapshot out.png [expanded] [crowded] [tall] [needs]` renders the menu with sample data and exits,
     /// so the design can be reviewed without clicking through the menu bar. `crowded` adds providers until all seven show;
     /// `tall` adds every agent and caps the menu's height at 620 points, so its middle scrolls; `needs` has an agent
-    /// waiting on you.
+    /// waiting on you. `Afterhours --snapshot-mug out.png` renders every mug mood on a sheet and prints how many pixels
+    /// separate each pair.
     init() {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--snapshot"), arguments.count > index + 1 {
@@ -22,6 +23,9 @@ struct AfterhoursApp: App {
         }
         if let index = arguments.firstIndex(of: "--snapshot-motion"), arguments.count > index + 1 {
             Self.snapshotMotion(to: arguments[index + 1], flip: arguments.dropFirst(index + 2).first ?? "limits")
+        }
+        if let index = arguments.firstIndex(of: "--snapshot-mug"), arguments.count > index + 1 {
+            Mug.snapshotSheet(to: arguments[index + 1])
         }
         // A snapshot flag this build doesn't handle must end here, because a real launch changes power settings.
         if let flag = arguments.dropFirst().first(where: { $0.hasPrefix("--snapshot") }) {
