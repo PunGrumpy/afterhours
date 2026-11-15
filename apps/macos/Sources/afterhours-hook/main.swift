@@ -30,7 +30,8 @@ let resolved: HookAction
 if let explicit = option("--state") {
     guard let action = HookAction(explicitState: explicit) else { exit(0) }
     resolved = action
-} else if let event = payload["hook_event_name"] as? String, let mapped = HookAction(claudeEvent: event) {
+} else if let event = payload["hook_event_name"] as? String,
+          let mapped = HookAction(claudeEvent: event, notificationType: payload["notification_type"] as? String) {
     resolved = mapped
 } else {
     exit(0)

@@ -122,22 +122,23 @@ final class AppModel {
     }
 
     /// A model with sample state and no side effects, for rendering the menu outside the app.
-    init(preview: Preferences, crowded: Bool = false, tall: Bool = false) {
+    init(preview: Preferences, crowded: Bool = false, tall: Bool = false, needs: Bool = false) {
         prefs = preview
         state = .holding
         holdingSince = Date().addingTimeInterval(-83 * 60)
         battery = BatteryStatus(percent: 64, onAC: false, charging: false, minutesToEmpty: 310)
         installedAgents = tall ? Set(AgentKind.all.map(\.id)) : ["claude", "codex", "opencode"]
-        sessions = Self.sampleSessions(crowded: crowded, tall: tall)
+        sessions = Self.sampleSessions(crowded: crowded, tall: tall, needs: needs)
         usage.seed(Self.sampleUsage(crowded: crowded))
     }
 
     /// `tall` adds every agent, each with sessions in mixed states when `crowded`, so the menu has more rows than a screen.
-    private static func sampleSessions(crowded: Bool, tall: Bool) -> [AgentSession] {
+    private static func sampleSessions(crowded: Bool, tall: Bool, needs: Bool) -> [AgentSession] {
         func sessions(_ id: String, _ name: String, _ states: [AgentState]) -> [AgentSession] {
             states.map { AgentSession(agentId: id, agentName: name, state: $0) }
         }
-        var result = sessions("claude", "Claude Code", [.working, .working]) + sessions("codex", "Codex", [.idle])
+        var result = sessions("claude", "Claude Code", needs ? [.working, .waiting] : [.working, .working])
+            + sessions("codex", "Codex", [.idle])
         guard tall else { return result }
         let mixes: [[AgentState]] = [[.working, .idle, .idle], [.waiting, .idle], [.idle, .idle], [.working, .waiting, .idle]]
         let others = AgentKind.all.filter { $0.id != "claude" && $0.id != "codex" }
@@ -511,14 +512,17 @@ final class AppModel {
                 tally: SessionTally(group.map(\.state))
             )
         }
-        // Agents with sessions first, and among them the ones that need a look; the order is otherwise kept.
+        // An agent that needs you leads, then the ones working, then any with sessions; the order is otherwise kept.
         func rank(_ summary: AgentSummary) -> Int {
-            if summary.tally.working > 0 { return 0 }
-            if summary.tally.waiting > 0 { return 1 }
+            if summary.tally.waiting > 0 { return 0 }
+            if summary.tally.working > 0 { return 1 }
             return summary.tally.total > 0 ? 2 : 3
         }
         return summaries.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
+
+    /// The names of the agents with a session blocked on you, in the order the menu lists them.
+    var waitingAgents: [String] { agentSummaries.filter { $0.tally.waiting > 0 }.map(\.name) }
 
     /// How long the battery lasts before the hold ends, at the cutoff if one applies, while holding on battery.
     var holdTimeLeft: (minutes: Int, atCutoff: Bool)? {
@@ -588,8 +592,8 @@ final class AppModel {
 private extension AgentState {
     var sortKey: Int {
         switch self {
-        case .working: 0
-        case .waiting: 1
+        case .waiting: 0
+        case .working: 1
         case .idle: 2
         }
     }

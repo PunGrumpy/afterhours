@@ -89,10 +89,10 @@ private struct TickingFigure: ViewModifier {
 
 /// The header's result and what it means, one entry per state.
 private struct MenuHeadline: Equatable {
-    let title: String
+    private(set) var title: String
     let detail: String
 
-    init(state: HoldState, reason: HoldReason, since: Date?, lidProof: Bool, now: Date) {
+    init(state: HoldState, reason: HoldReason, since: Date?, lidProof: Bool, waitingAgents: [String], now: Date) {
         switch (state, reason) {
         case (.holding, .working):
             let seconds = Int(now.timeIntervalSince(since ?? now))
@@ -116,6 +116,10 @@ private struct MenuHeadline: Equatable {
         case (.blocked(let why), _):
             title = "Released"
             detail = why
+        }
+        // Only a hold names who needs you; the detail stays what that hold shows.
+        if state.isHolding, let first = waitingAgents.first {
+            title = waitingAgents.count == 1 ? "\(first) needs you" : "\(waitingAgents.count) agents need you"
         }
     }
 }
@@ -276,7 +280,9 @@ struct MenuView: View, Themed {
 
     /// Swaps the whole headline with the kind of result, so a ticking time stays in place.
     private var headlineKey: String {
-        model.state.isHolding && model.holdReason != .working ? "waiting" : model.state.key
+        guard model.state.isHolding else { return model.state.key }
+        let hold = model.holdReason == .working ? model.state.key : "waiting"
+        return model.waitingAgents.isEmpty ? hold : "needs-\(hold)"
     }
 
     private var showsLidWarning: Bool { prefs.lidClosedMode && !model.lidProof }
@@ -293,7 +299,7 @@ struct MenuView: View, Themed {
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 let headline = MenuHeadline(
                     state: model.state, reason: model.holdReason, since: model.holdingSince,
-                    lidProof: model.lidProof, now: context.date
+                    lidProof: model.lidProof, waitingAgents: model.waitingAgents, now: context.date
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline.title)
