@@ -62,6 +62,8 @@ final class AppModel {
     @ObservationIgnored private var sleepGuard: Process?
     @ObservationIgnored private var sessionWatcher: DispatchSourceFileSystemObject?
     @ObservationIgnored private var hookTickPending = false
+    /// One sweep at a time, because every tick sees the same leftovers until it ends.
+    @ObservationIgnored private var sweepingTemporaries = false
     /// Decoded session files by path, so an unchanged file isn't read and decoded again every tick.
     @ObservationIgnored private var recordCache: [URL: (modified: Date, record: SessionRecord)] = [:]
 
@@ -454,6 +456,13 @@ final class AppModel {
         let files = (try? fm.contentsOfDirectory(at: AfterhoursPaths.sessions,
                                                  includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let now = Date()
+        if !sweepingTemporaries, files.contains(where: SessionFolder.isTemporary) {
+            sweepingTemporaries = true
+            Task { [weak self] in
+                _ = await SessionFolder.removeStaleTemporaries(in: AfterhoursPaths.sessions, now: now)
+                self?.sweepingTemporaries = false
+            }
+        }
         var cache: [URL: (modified: Date, record: SessionRecord)] = [:]
         let records = files.filter { $0.pathExtension == "json" }.compactMap { url -> SessionRecord? in
             let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
