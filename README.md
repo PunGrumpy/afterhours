@@ -71,7 +71,7 @@ While it holds on battery, the menu shows about how long until your battery cuto
 
 ## Subscription limits
 
-The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when you open the menu and every 5 minutes while agents work:
+The menu shows how much of each subscription's rate-limit windows is left and when they reset, and colors each bar by where the current burn rate lands: blue with room to spare, orange inside the last tenth, red when it runs out before the reset. So you know before closing the lid whether tonight's work fits. It reads the logins the tools already keep and asks each provider for the numbers when Afterhours starts, when you open the menu, and every 5 minutes while agents work:
 
 - **Claude Code**: the Keychain login, one per `~/.claude*` config directory, or that directory's `.credentials.json`
 - **Codex**: `~/.codex/auth.json`
@@ -111,7 +111,7 @@ Claude Code doesn't fire a `Stop` hook when you interrupt it with Esc, so a sess
 
 Afterhours has no telemetry, analytics, crash reporting, or update checks. It reads process names and command lines to spot agents, and never opens your project files.
 
-The only network requests are the subscription checks described above. They run only while **Settings… > Limits > Show subscription limits in the menu** is on, which is the default. Each request sends a login your tool already stores on your Mac to that tool's own vendor. It reads, never writes, and runs when you open the menu and every 5 minutes while agents work:
+The only network requests are the subscription checks described above. They run only while **Settings… > Limits > Show subscription limits in the menu** is on, which is the default. Each request sends a login your tool already stores on your Mac to that tool's own vendor. It reads, never writes, and runs when Afterhours starts, when you open the menu, and every 5 minutes while agents work:
 
 | Provider | Login it reads | Where it's sent |
 | --- | --- | --- |

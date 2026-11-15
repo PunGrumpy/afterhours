@@ -126,12 +126,12 @@ const Page = () => (
       <p>
         Each check sends a login your tool already keeps on your Mac straight to
         that tool&apos;s own service, and reads back how much of each rate-limit
-        window is left. It runs when you open the menu and every 5 minutes while
-        agents work. Afterhours doesn&apos;t store, renew, or forward these
-        logins. Antigravity saves only a long-lived Google login, so Afterhours
-        asks Google for an access token that lasts an hour and keeps it in
-        memory. Nothing passes through a server of ours, because there
-        isn&apos;t one.
+        window is left. It runs when Afterhours starts, when you open the menu,
+        and every 5 minutes while agents work. Afterhours doesn&apos;t store,
+        renew, or forward these logins. Antigravity saves only a long-lived
+        Google login, so Afterhours asks Google for an access token that lasts
+        an hour and keeps it in memory. Nothing passes through a server of ours,
+        because there isn&apos;t one.
       </p>
       <div className="border-ink/[0.08] -mx-1 overflow-hidden rounded-[12px] border">
         <table className="w-full text-left text-[14px]">
