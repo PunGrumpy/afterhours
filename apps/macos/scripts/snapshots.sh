@@ -23,6 +23,7 @@ RENDERS=(
   "menu-crowded-expanded --snapshot crowded expanded"
   "menu-tall --snapshot tall"
   "menu-tall-crowded --snapshot tall crowded"
+  "menu-needs --snapshot needs"
   "settings-general --snapshot-settings general"
   "settings-power --snapshot-settings power"
   "settings-agents --snapshot-settings agents"
