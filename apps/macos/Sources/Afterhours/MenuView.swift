@@ -367,8 +367,8 @@ struct MenuView: View, Themed {
             VStack(alignment: .leading, spacing: 0) {
                 DisclosureRow(expanded: $prefs.limitsExpanded, title: "Limits") {
                     if prefs.limitsExpanded {
-                        if let checkedAt = model.usage.checkedAt {
-                            Text(model.usage.refreshing ? "Checking…" : "As of \(checkedAt.formatted(date: .omitted, time: .shortened))")
+                        if let status = model.usage.refreshing ? "Checking…" : model.usage.asOf.map({ "As of \(asOfText($0))" }) {
+                            Text(status)
                                 .font(.system(size: 12).monospacedDigit())
                                 .foregroundStyle(palette.tertiaryText)
                         }
@@ -399,6 +399,13 @@ struct MenuView: View, Themed {
             .transition(.opacity)
             divider
         }
+    }
+
+    /// The date joins the time once the bars are from an earlier day, so old bars don't pass for today's.
+    private func asOfText(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 
     // MARK: Pause
