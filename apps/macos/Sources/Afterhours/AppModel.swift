@@ -373,9 +373,12 @@ final class AppModel {
 
         guard wasHolding != next.isHolding else { return }
         holdingSince = next.isHolding ? Date() : nil
-        switch HoldPolicy.notice(from: previous, to: next) {
+        // `holdReason` is still the ending hold's, because a tick with no reason leaves it alone.
+        switch HoldPolicy.notice(from: previous, to: next, lastReason: holdReason, sessionsOpen: !sessions.isEmpty) {
         case .started: announce("Keeping your Mac awake", body: summary, kind: .hold)
-        case .finished: announce("Your Mac can sleep again", body: "All agents finished.", kind: .hold)
+        case .finished(let waitRanOut):
+            let body = waitRanOut ? "No agent is working, and the wait for your reply is over." : "All agents finished."
+            announce("Your Mac can sleep again", body: body, kind: .hold)
         case .blocked(let reason): announce("Your Mac can sleep again", body: reason, kind: .hold)
         case nil: break
         }
