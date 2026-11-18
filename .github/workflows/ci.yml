@@ -38,8 +38,10 @@ jobs:
           TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail
-          if [[ -z "$TURBO_SCM_BASE" || "$TURBO_SCM_BASE" =~ ^0+$ ]] || ! git cat-file -e "$TURBO_SCM_BASE" 2>/dev/null; then
-            # No usable base (new branch, force push): build everything rather than nothing.
+          if [[ -z "$TURBO_SCM_BASE" || "$TURBO_SCM_BASE" =~ ^0+$ ]] || ! git cat-file -e "$TURBO_SCM_BASE" 2>/dev/null \
+            || ! git diff --quiet "$TURBO_SCM_BASE" HEAD -- .github/workflows/ci.yml; then
+            # No usable base (new branch, force push), or this workflow changed and
+            # turbo can't see that: build everything rather than nothing.
             echo "macos=true" >> "$GITHUB_OUTPUT"
             echo "web=true" >> "$GITHUB_OUTPUT"
             exit 0
