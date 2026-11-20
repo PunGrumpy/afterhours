@@ -201,6 +201,11 @@ final class AppModel {
         ]
         if crowded {
             accounts += [
+                UsageAccount(provider: "devin", plan: "Pro", locations: ["you@example.com"], windows: [
+                    UsageWindow(id: "daily", kind: .other, label: "Daily", usedPercent: 28,
+                                resetsAt: now.addingTimeInterval(12 * 3600), duration: 24 * 3600),
+                    window("weekly", .weekly, "Weekly", 43, hours: 100),
+                ]),
                 UsageAccount(provider: "opencode", plan: "Zen", locations: ["~/.local/share/opencode"], windows: [
                     window("month", .monthly, "Monthly", 41, hours: 300),
                 ]),

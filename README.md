@@ -79,6 +79,7 @@ The menu shows how much of each subscription's rate-limit windows is left and wh
 - **Copilot**: `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login
 - **OpenCode Go**: `~/.local/share/opencode/auth.json`
 - **Grok Build**: `~/.grok/auth.json`
+- **Devin**: the Devin CLI's `$XDG_DATA_HOME/devin/credentials.toml`, or `~/.local/share/devin/credentials.toml`, with `~/Library/Application Support/devin/credentials.toml` as a fallback. Shows daily and weekly subscription quotas, not credit balances. Sign in with `devin auth login`; usage monitoring does not detect Devin agent processes.
 - **Antigravity**: the Google sign-in in T3 Code's Antigravity profile, or `~/.gemini/antigravity-acp/acp_token.json`
 
 Afterhours never stores or renews a login. Antigravity saves only a long-lived Google login, so Afterhours asks Google for an access token that lasts an hour and keeps it in memory. If a login expires, run that tool once. Turn it off in **Settings… > Limits**.
@@ -121,6 +122,7 @@ The only network requests are the subscription checks described above. They run 
 | Copilot | `~/.config/github-copilot/apps.json` or `hosts.json`, or the `gh` login | `api.github.com`, presented as Copilot Chat |
 | Cursor | the Cursor app's state store or `~/.cursor/auth.json` | `api2.cursor.sh`, presented as Cursor's CLI |
 | Grok Build | `~/.grok/auth.json` | `cli-chat-proxy.grok.com` |
+| Devin | the Devin CLI's `devin/credentials.toml` | `server.codeium.com`, or the login's HTTPS `api_server_url`, presented as Devin CLI |
 | Antigravity | the Google sign-in in T3 Code's Antigravity profile or `~/.gemini/antigravity-acp/acp_token.json` | `oauth2.googleapis.com` for an hour-long access token, then `cloudcode-pa.googleapis.com` or `daily-cloudcode-pa.googleapis.com`, presented as Antigravity |
 | CLIProxyAPI hubs you add | the management key you enter | the hub's URL |
 
