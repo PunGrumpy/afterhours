@@ -39,13 +39,22 @@ private func devinFixture(percent: UInt64? = 75, hiddenWeekly: Bool = false, res
     let account = UsageLimits.devinAccount(.success(devinFixture()), location: "~/.local/share/devin")
     #expect(account.provider == "devin")
     #expect(account.plan == "Pro")
-    #expect(account.locations == ["you@example.com"])
+    #expect(account.locations == ["~/.local/share/devin"])
     #expect(account.windows.map(\.label) == ["Daily", "Weekly"])
     #expect(account.windows.map(\.kind) == [.other, .weekly])
     #expect(account.windows.map(\.usedPercent) == [25, 60])
     #expect(account.windows.map(\.duration) == [86_400, 604_800])
     #expect(account.windows.first?.resetsAt == Date(timeIntervalSince1970: 1_800_000_000))
     #expect(account.error == nil)
+}
+
+@Test func devinLocationStaysStableWhenRefreshFails() {
+    let location = "~/.local/share/devin"
+    let online = UsageLimits.devinAccount(.success(devinFixture()), location: location)
+    let offline = UsageLimits.devinAccount(.failure(.network("Offline")), location: location)
+    #expect(online.locations == [location])
+    #expect(offline.locations == online.locations)
+    #expect(offline.error == "Offline")
 }
 
 @Test func devinHonorsHiddenQuotaAndMissingPercent() {

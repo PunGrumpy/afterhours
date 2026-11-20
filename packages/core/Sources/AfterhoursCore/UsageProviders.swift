@@ -80,9 +80,8 @@ extension UsageLimits {
                 return UsageWindow(id: id, kind: kind, label: label, usedPercent: 100 - Double(min(100, max(0, remaining))),
                                    resetsAt: Date(timeIntervalSince1970: Double(timestamp)), duration: Double(days * 24 * 3600))
             }
-            let email = status.bytes[7].flatMap { String(data: $0, encoding: .utf8) }.flatMap(nonEmpty)
             return UsageAccount(provider: "devin", plan: plan.bytes[2].flatMap { String(data: $0, encoding: .utf8) },
-                                locations: [email ?? location], windows: windows)
+                                locations: [location], windows: windows)
         } catch {
             let error = (error as? FetchError) ?? .decoding
             return UsageAccount(provider: "devin", plan: nil, locations: [location], windows: [],
