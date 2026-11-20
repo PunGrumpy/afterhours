@@ -38,7 +38,7 @@ struct ProviderPool: Identifiable {
     var name: String { Self.subscriptionNames[provider] ?? AgentKind.named(provider)?.displayName ?? provider }
 
     /// Subscriptions named differently from the CLI that uses them, or with no process to detect.
-    private static let subscriptionNames = ["antigravity": "Antigravity", "grok": "Grok Build"]
+    private static let subscriptionNames = ["antigravity": "Antigravity", "grok": "Grok Build", "devin": "Devin"]
 
     /// The plan when every account shares one.
     var plan: String? {

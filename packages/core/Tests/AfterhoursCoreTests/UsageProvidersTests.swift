@@ -2,6 +2,134 @@ import Foundation
 import Testing
 @testable import AfterhoursCore
 
+private func devinVarint(_ value: UInt64) -> Data {
+    var value = value
+    var data = Data()
+    while value >= 128 {
+        data.append(UInt8(value & 127) | 128)
+        value >>= 7
+    }
+    data.append(UInt8(value))
+    return data
+}
+
+private func devinNumber(_ field: Int, _ value: UInt64) -> Data {
+    devinVarint(UInt64(field << 3)) + devinVarint(value)
+}
+
+private func devinBytes(_ field: Int, _ value: Data) -> Data {
+    devinVarint(UInt64(field << 3 | 2)) + devinVarint(UInt64(value.count)) + value
+}
+
+private func devinFixture(percent: UInt64? = 75, hiddenWeekly: Bool = false, resets: Bool = true) -> Data {
+    let nestedPlan = devinBytes(2, Data("Fallback".utf8))
+    var quota = devinBytes(1, nestedPlan)
+    if let percent { quota += devinNumber(14, percent) }
+    quota += devinNumber(15, 40)
+    if resets {
+        quota += devinNumber(17, 1_800_000_000)
+        quota += devinNumber(18, 1_800_500_000)
+    }
+    let status = devinBytes(7, Data("you@example.com".utf8)) + devinBytes(13, quota)
+    let plan = devinBytes(2, Data("Pro".utf8)) + devinNumber(37, hiddenWeekly ? 1 : 0)
+    return devinBytes(1, status) + devinBytes(2, plan)
+}
+
+@Test func devinReadsQuotaPlanAndAuthoritativePlanInfo() {
+    let account = UsageLimits.devinAccount(.success(devinFixture()), location: "~/.local/share/devin")
+    #expect(account.provider == "devin")
+    #expect(account.plan == "Pro")
+    #expect(account.locations == ["~/.local/share/devin"])
+    #expect(account.windows.map(\.label) == ["Daily", "Weekly"])
+    #expect(account.windows.map(\.kind) == [.other, .weekly])
+    #expect(account.windows.map(\.usedPercent) == [25, 60])
+    #expect(account.windows.map(\.duration) == [86_400, 604_800])
+    #expect(account.windows.first?.resetsAt == Date(timeIntervalSince1970: 1_800_000_000))
+    #expect(account.error == nil)
+}
+
+@Test func devinLocationStaysStableWhenRefreshFails() {
+    let location = "~/.local/share/devin"
+    let online = UsageLimits.devinAccount(.success(devinFixture()), location: location)
+    let offline = UsageLimits.devinAccount(.failure(.network("Offline")), location: location)
+    #expect(online.locations == [location])
+    #expect(offline.locations == online.locations)
+    #expect(offline.error == "Offline")
+}
+
+@Test func devinHonorsHiddenQuotaAndMissingPercent() {
+    let account = UsageLimits.devinAccount(.success(devinFixture(percent: nil, hiddenWeekly: true)), location: "login")
+    #expect(account.windows.map(\.id) == ["daily"])
+    #expect(account.windows.map(\.usedPercent) == [100])
+    let clamped = UsageLimits.devinAccount(.success(devinFixture(percent: 150)), location: "login")
+    #expect(clamped.windows.first?.usedPercent == 0)
+}
+
+@Test func devinCreditPlanAndEmptyResponseHaveNoWindows() {
+    let account = UsageLimits.devinAccount(.success(devinFixture(resets: false)), location: "login")
+    #expect(account.windows.isEmpty)
+    #expect(account.error == nil)
+    let empty = UsageLimits.devinAccount(.success(Data()), location: "login")
+    #expect(empty.windows.isEmpty)
+    #expect(empty.locations == ["login"])
+}
+
+@Test func devinFallsBackToNestedPlanAndSkipsUnknownFields() {
+    let plan = devinBytes(2, Data("Team".utf8)) + devinNumber(36, 1)
+    let quota = devinBytes(1, plan) + devinNumber(17, 1_800_000_000)
+    let unknown = Data([0xa1, 0x06]) + Data(repeating: 0, count: 8)
+        + Data([0xad, 0x06]) + Data(repeating: 0, count: 4)
+        + devinBytes(102, Data([1, 2, 3])) + devinNumber(103, 9)
+    let response = devinBytes(1, devinBytes(13, quota)) + unknown
+    let account = UsageLimits.devinAccount(.success(response), location: "login")
+    #expect(account.plan == "Team")
+    #expect(account.windows.isEmpty)
+    #expect(account.error == nil)
+}
+
+@Test func devinReportsRejectedLoginAndMalformedProtobuf() {
+    let rejected = UsageLimits.devinAccount(.failure(.status(401)), location: "login")
+    #expect(rejected.error?.contains("Run devin auth login again") == true)
+    #expect(rejected.windows.isEmpty)
+    for data in [Data([0x0a, 0xff]), Data([0]), Data([0x0a, 5, 1]), Data(repeating: 0xff, count: 11)] {
+        let account = UsageLimits.devinAccount(.success(data), location: "login")
+        #expect(account.error != nil)
+        #expect(account.windows.isEmpty)
+    }
+}
+
+@Test func devinRequestEncodesCLIIdentityAndPrefixesOnlyBareJWTs() {
+    for (key, encoded) in [("a.b.c", "devin-session-token$a.b.c"),
+                           ("devin-session-token$a.b.c", "devin-session-token$a.b.c"), ("sk-ws-key", "sk-ws-key")] {
+        let request = UsageLimits.devinRequest(key: key, server: "http://unsafe.example")
+        let metadata = [(1, "devin-cli"), (7, "3000.14.30821"), (2, "3000.14.30821"),
+                        (28, "chisel"), (12, "chisel"), (3, encoded), (4, "en"), (5, "darwin")]
+            .reduce(into: Data()) { $0 += devinBytes($1.0, Data($1.1.utf8)) }
+        #expect(request.httpBody == devinBytes(1, metadata))
+        #expect(request.url?.absoluteString == "https://server.codeium.com/exa.seat_management_pb.SeatManagementService/GetUserStatus")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/proto")
+        #expect(request.value(forHTTPHeaderField: "Connect-Protocol-Version") == "1")
+    }
+    #expect(UsageLimits.devinRequest(key: "key", server: "https://seat.example").url?.host == "seat.example")
+}
+
+@Test func devinParsesOnlyTopLevelTOMLCredentials() {
+    let login = UsageLimits.devinCredentials("""
+        # login
+        windsurf_api_key = "seat-key" # secret
+        api_server_url = "https://seat.example"
+        [other]
+        windsurf_api_key = "not-this-key"
+        """)
+    #expect(login?.key == "seat-key")
+    #expect(login?.server == "https://seat.example")
+    #expect(UsageLimits.devinCredentials("") == nil)
+    #expect(UsageLimits.devinCredentials("windsurf_api_key = \"\"") == nil)
+    #expect(UsageLimits.devinCredentials("[other]\nwindsurf_api_key = \"key\"") == nil)
+    #expect(UsageLimits.devinCredentials("windsurf_api_key = broken") == nil)
+}
+
 private func runSQLite(_ database: URL, _ sql: String) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")

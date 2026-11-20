@@ -10,13 +10,138 @@ extension UsageLimits {
         async let cursor = readCursor()
         async let grok = readGrok()
         async let antigravity = readAntigravity()
-        return await [opencode, copilot, cursor, grok].compactMap { $0 } + antigravity
+        async let devin = readDevin()
+        return await [opencode, copilot, cursor, grok, devin].compactMap { $0 } + antigravity
     }
 
     static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
     static func readJSON(at url: URL) -> [String: Any]? {
         (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    }
+
+    // MARK: - Devin
+
+    static func devinCredentials(_ toml: String) -> (key: String, server: String?)? {
+        var values: [String: String] = [:]
+        for line in toml.split(separator: "\n") {
+            let line = line.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("[") { break }
+            let pair = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard pair.count == 2, pair[1].hasPrefix("\""),
+                  let end = pair[1].dropFirst().firstIndex(of: "\"") else { continue }
+            values[pair[0]] = String(pair[1][pair[1].index(after: pair[1].startIndex)..<end])
+        }
+        guard let key = nonEmpty(values["windsurf_api_key"]) else { return nil }
+        return (key, values["api_server_url"])
+    }
+
+    private static func readDevin() async -> UsageAccount? {
+        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"].map { URL(fileURLWithPath: $0) }
+            ?? home.appendingPathComponent(".local/share")
+        for dir in [dataHome.appendingPathComponent("devin"), home.appendingPathComponent("Library/Application Support/devin")] {
+            guard let text = try? String(contentsOf: dir.appendingPathComponent("credentials.toml"), encoding: .utf8),
+                  let credentials = devinCredentials(text) else { continue }
+            return devinAccount(await send(devinRequest(key: credentials.key, server: credentials.server)),
+                                location: shortPath(dir))
+        }
+        return nil
+    }
+
+    static func devinRequest(key: String, server: String? = nil) -> URLRequest {
+        let custom = server.flatMap(URL.init(string:))
+        let base = custom.flatMap { $0.scheme == "https" && $0.host != nil ? $0 : nil }
+            ?? URL(string: "https://server.codeium.com")!
+        var request = URLRequest(url: base.appendingPathComponent("exa.seat_management_pb.SeatManagementService/GetUserStatus"),
+                                 timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("application/proto", forHTTPHeaderField: "Content-Type")
+        request.setValue("1", forHTTPHeaderField: "Connect-Protocol-Version")
+        let credential = !key.hasPrefix("devin-session-token$") && key.split(separator: ".", omittingEmptySubsequences: false).count == 3
+            ? "devin-session-token$" + key : key
+        let metadata = [(1, "devin-cli"), (7, "3000.14.30821"), (2, "3000.14.30821"), (28, "chisel"),
+                        (12, "chisel"), (3, credential), (4, "en"), (5, "darwin")]
+            .reduce(into: Data()) { $0.append(DevinProto.field($1.0, Data($1.1.utf8))) }
+        request.httpBody = DevinProto.field(1, metadata)
+        return request
+    }
+
+    static func devinAccount(_ result: Result<Data, FetchError>, location: String) -> UsageAccount {
+        do {
+            let response = try DevinProto(try result.get())
+            let status = try DevinProto(response.bytes[1] ?? Data())
+            let quota = try DevinProto(status.bytes[13] ?? Data())
+            let plan = try DevinProto(response.bytes[2] ?? quota.bytes[1] ?? Data())
+            let windows = [("daily", UsageWindow.Kind.other, "Daily", 14, 17, 36, 1),
+                           ("weekly", .weekly, "Weekly", 15, 18, 37, 7)].compactMap { id, kind, label, percent, reset, hidden, days -> UsageWindow? in
+                let timestamp = Int64(bitPattern: quota.numbers[reset] ?? 0)
+                guard plan.numbers[hidden, default: 0] == 0, timestamp > 0 else { return nil }
+                let remaining = Int32(truncatingIfNeeded: quota.numbers[percent] ?? 0)
+                return UsageWindow(id: id, kind: kind, label: label, usedPercent: 100 - Double(min(100, max(0, remaining))),
+                                   resetsAt: Date(timeIntervalSince1970: Double(timestamp)), duration: Double(days * 24 * 3600))
+            }
+            return UsageAccount(provider: "devin", plan: plan.bytes[2].flatMap { String(data: $0, encoding: .utf8) },
+                                locations: [location], windows: windows)
+        } catch {
+            let error = (error as? FetchError) ?? .decoding
+            return UsageAccount(provider: "devin", plan: nil, locations: [location], windows: [],
+                                error: error.message(signIn: "Run devin auth login again"))
+        }
+    }
+
+    private struct DevinProto {
+        var bytes: [Int: Data] = [:]
+        var numbers: [Int: UInt64] = [:]
+
+        init(_ data: Data) throws {
+            let data = Array(data)
+            var offset = 0
+            func varint() throws -> UInt64 {
+                var value: UInt64 = 0
+                for shift in stride(from: 0, through: 63, by: 7) {
+                    guard offset < data.count else { throw FetchError.decoding }
+                    let byte = data[offset]
+                    offset += 1
+                    if shift == 63 && byte > 1 { throw FetchError.decoding }
+                    value |= UInt64(byte & 127) << shift
+                    if byte & 128 == 0 { return value }
+                }
+                throw FetchError.decoding
+            }
+            while offset < data.count {
+                let tag = try varint()
+                guard tag >> 3 > 0, tag >> 3 <= 0x1fff_ffff else { throw FetchError.decoding }
+                let field = Int(tag >> 3)
+                switch tag & 7 {
+                case 0: numbers[field] = try varint()
+                case 1, 2, 5:
+                    let length: UInt64
+                    switch tag & 7 {
+                    case 1: length = 8
+                    case 5: length = 4
+                    default: length = try varint()
+                    }
+                    guard length <= UInt64(data.count - offset) else { throw FetchError.decoding }
+                    if tag & 7 == 2 { bytes[field] = Data(data[offset ..< offset + Int(length)]) }
+                    offset += Int(length)
+                default: throw FetchError.decoding
+                }
+            }
+        }
+
+        static func field(_ number: Int, _ data: Data) -> Data {
+            func varint(_ number: Int) -> Data {
+                var value = number
+                var bytes = Data()
+                while value >= 128 {
+                    bytes.append(UInt8(value & 127) | 128)
+                    value >>= 7
+                }
+                bytes.append(UInt8(value))
+                return bytes
+            }
+            return varint(number << 3 | 2) + varint(data.count) + data
+        }
     }
 
     // MARK: - OpenCode Go
