@@ -1,5 +1,11 @@
 # @afterhours/macos
 
+## 0.6.0
+
+### Minor Changes
+
+- 3b91846: You can now track your Devin CLI subscription's daily and weekly limits using the login already on your Mac.
+
 ## 0.5.0
 
 ### Minor Changes
