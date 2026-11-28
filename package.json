@@ -21,11 +21,11 @@
     "eslint-plugin-github": "6.1.2",
     "eslint-plugin-sonarjs": "^4.2.2",
     "husky": "^9.1.7",
-    "oxfmt": "^0.78.0",
-    "oxlint": "^1.93.0",
-    "oxlint-plugin-react-doctor": "^0.9.22",
-    "turbo": "^2.11.10",
-    "ultracite": "8.1.1"
+    "oxfmt": "^0.80.0",
+    "oxlint": "^1.95.0",
+    "oxlint-plugin-react-doctor": "^0.9.23",
+    "turbo": "^2.11.13",
+    "ultracite": "8.3.1"
   },
   "packageManager": "bun@1.4.2",
   "ignoreScripts": [
